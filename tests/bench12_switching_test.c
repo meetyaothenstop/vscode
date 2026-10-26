@@ -15,6 +15,8 @@ int main(void)
     const double dt = 1.0 / (150000.0 * 400.0);
     double il = 0.0, voltage = 0.0, sample_il = 0.0, sample_v = 0.0;
     double peak = 0.0, sampled_peak = 0.0, sampled_min = 0.0;
+    double voltage_peak = 0.0;
+    unsigned voltage_peak_cycle = 0U;
     unsigned minimum_cycle = 0U;
     double minimum_voltage = 0.0;
     PwmPlan active, pending;
@@ -42,8 +44,14 @@ int main(void)
             int left = phase >= 0.03 && phase < 0.03 + active.left_high;
             int right = phase >= 0.03 && phase < 0.03 + active.right_high;
             il += dt * (12.0 * left - voltage * right - 0.05 * il) / 22e-6;
-            voltage += dt * (right * il - voltage / 100.0) / 690e-6;
+            /* Board population confirmed by user: 2x220uF + 2x10uF.
+             * Nominal total only; ESR/parasitics/sensor errors are excluded. */
+            voltage += dt * (right * il - voltage / 100.0) / 460e-6;
             if (il > peak) peak = il;
+            if (voltage > voltage_peak) {
+                voltage_peak = voltage;
+                voltage_peak_cycle = n;
+            }
             /* Track/hold ends at .25 + 24.5/37.5MHz / period = .348. */
             if (k == 138U) {
                 sample_il = il;
@@ -62,6 +70,11 @@ int main(void)
            voltage, peak, sampled_peak);
     assert(forward_Y.EN_F_BUCK && !forward_Y.EN_F_BOOST);
     assert(fabs(voltage - 6.0) < 0.5);
+    printf("Nominal 460 uF startup peak: %.6f V at %.6f s\n",
+           voltage_peak, voltage_peak_cycle / 150000.0);
+    /* A correct final voltage must not hide startup overshoot that would
+     * trip the real backend's 6V x1.1 output protection. */
+    assert(voltage_peak <= 6.6);
     printf("Minimum sampled IL: %.3f A at cycle %u, voltage %.3f V\n",
            sampled_min, minimum_cycle, minimum_voltage);
     assert(sampled_min > -1.0);
