@@ -891,6 +891,31 @@ int main(void)
     unified_first_fault_diagnostics();
 #endif
     cold_start_samples_rechecked();
+#if defined(POWER_BENCH_FAST_BUCK) && POWER_BENCH_FAST_BUCK
+    /* Reported 13.53V sample must be allowed through request, preparation
+     * and running. Still shut off on the first sample above the new limit. */
+    const float accepted_inputs[] = {13.53f, 13.9f, 14.0f};
+    for (unsigned n = 0; n < sizeof(accepted_inputs)/sizeof(accepted_inputs[0]); ++n) {
+        float vin = accepted_inputs[n];
+        stopped_samples(vin, 0.0f, 0.0f);
+        CHECK(request(1U, 6.0f));
+        arm_pending(1U, vin, 0.0f);
+        for (unsigned cycle = 0; cycle < 10; ++cycle) {
+            period(vin, 0.0f, 0.0f);
+            CHECK(power_status.state == POWER_RUNNING && power_status.fault == 0U);
+        }
+        period(14.1f, 0.0f, 0.0f);
+        expect_fault(POWER_FAULT_INPUT);
+        CHECK(fabsf(power_status.fault_input_volts - 14.1f) < 0.02f);
+    }
+    stopped_samples(12.0f, 0.0f, 0.0f);
+    power_status.v_left = 14.0f;
+    CHECK(request(1U, 6.0f));
+    stopped_samples(12.0f, 0.0f, 0.0f);
+    power_status.v_left = 14.001f;
+    CHECK(!request(1U, 6.0f) && power_status.fault_detail == 4U);
+    puts("FAST input margin: 13.53..14V accepted; above14V request/first-sample trip: PASS");
+#endif
     stopped_samples(12.0f, 0.0f, 0.0f);
     CHECK(request(1U, 6.0f));
     CHECK(power_status.protection_ready == 0U && enabled_outputs == 0U);
@@ -927,7 +952,7 @@ int main(void)
         expect_fault(POWER_FAULT_START);
         CHECK(power_status.fault_detail == 3U);
     }
-    const float sources[] = {10.0f, 14.0f, 24.0f};
+    const float sources[] = {10.0f, 14.1f, 24.0f};
     for (unsigned n = 0U; n < sizeof(sources) / sizeof(sources[0]); ++n) {
         stopped_samples(sources[n], 0.0f, 0.0f);
         CHECK(!request(1U, 6.0f));
@@ -954,7 +979,7 @@ int main(void)
     /* Source limits apply after acceptance and throughout arming/running. */
     stopped_samples(12.0f, 0.0f, 0.0f);
     CHECK(request(1U, 6.0f));
-    period(14.0f, 0.0f, 0.0f);
+    period(14.1f, 0.0f, 0.0f);
     expect_fault(POWER_FAULT_INPUT);
     CHECK(HRTIM1->sCommonRegs.OENR == 0U);
     start_running(1U, 12.0f, 6.0f);
