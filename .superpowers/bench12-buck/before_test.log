@@ -1,0 +1,1 @@
+tests/power_control_test.c:690: request(1U, 6.0f) (state=4, fault=0x200, outputs=0x0)

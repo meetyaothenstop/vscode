@@ -1,0 +1,1 @@
+Assertion failed: strstr(frame.rows[0], "12V CCM DIAG"), file tests/bench12_menu_test.c, line 17

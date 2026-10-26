@@ -1,0 +1,73 @@
+tests/power_control_test.c: In function 'test_dwt_access':
+tests/power_control_test.c:48:33: error: 'power_diag' undeclared (first use in this function)
+   48 |     if (profile_delay_cycles && power_diag.irq.stage == profile_delay_stage) {
+      |                                 ^~~~~~~~~~
+tests/power_control_test.c:48:33: note: each undeclared identifier is reported only once for each function it appears in
+tests/power_control_test.c: In function 'unified_first_fault_diagnostics':
+tests/power_control_test.c:730:11: error: 'power_diag' undeclared (first use in this function)
+  730 |     CHECK(power_diag.version == 1U);
+      |           ^~~~~~~~~~
+tests/power_control_test.c:16:38: note: in definition of macro 'CHECK'
+   16 | #define CHECK(expression) do { if (!(expression)) { \
+      |                                      ^~~~~~~~~~
+tests/power_control_test.c:745:43: error: 'POWER_DIAG_CONTEXT_TIMER_IRQ' undeclared (first use in this function)
+  745 |         CHECK(power_diag.fault.context == POWER_DIAG_CONTEXT_TIMER_IRQ);
+      |                                           ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+tests/power_control_test.c:16:38: note: in definition of macro 'CHECK'
+   16 | #define CHECK(expression) do { if (!(expression)) { \
+      |                                      ^~~~~~~~~~
+tests/power_control_test.c:746:49: error: 'POWER_DIAG_STAGE_CHECKS' undeclared (first use in this function)
+  746 |         CHECK(power_diag.fault.profile.stage == POWER_DIAG_STAGE_CHECKS);
+      |                                                 ^~~~~~~~~~~~~~~~~~~~~~~
+tests/power_control_test.c:16:38: note: in definition of macro 'CHECK'
+   16 | #define CHECK(expression) do { if (!(expression)) { \
+      |                                      ^~~~~~~~~~
+tests/power_control_test.c:754:35: error: 'POWER_DIAG_CHECKPOINT_COUNT' undeclared (first use in this function)
+  754 |         for (unsigned n = 2U; n < POWER_DIAG_CHECKPOINT_COUNT; ++n)
+      |                                   ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+tests/power_control_test.c:777:39: error: 'POWER_DIAG_CONTEXT_START_REQUEST' undeclared (first use in this function)
+  777 |     CHECK(power_diag.fault.context == POWER_DIAG_CONTEXT_START_REQUEST);
+      |                                       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+tests/power_control_test.c:16:38: note: in definition of macro 'CHECK'
+   16 | #define CHECK(expression) do { if (!(expression)) { \
+      |                                      ^~~~~~~~~~
+tests/power_control_test.c:794:27: error: 'POWER_DIAG_STAGE_CONTROLLER' undeclared (first use in this function); did you mean 'POWER_FAULT_CONTROLLER'?
+  794 |     profile_delay_stage = POWER_DIAG_STAGE_CONTROLLER;
+      |                           ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                           POWER_FAULT_CONTROLLER
+tests/power_control_test.c:800:45: error: 'POWER_DIAG_STAGE_PREWRITE' undeclared (first use in this function)
+  800 |     CHECK(power_diag.fault.profile.stage == POWER_DIAG_STAGE_PREWRITE);
+      |                                             ^~~~~~~~~~~~~~~~~~~~~~~~~
+tests/power_control_test.c:16:38: note: in definition of macro 'CHECK'
+   16 | #define CHECK(expression) do { if (!(expression)) { \
+      |                                      ^~~~~~~~~~
+tests/power_control_test.c:804:54: error: 'POWER_DIAG_CP_STATE' undeclared (first use in this function)
+  804 |     CHECK(power_diag.fault.profile.checkpoint_cycles[POWER_DIAG_CP_STATE] == 0U);
+      |                                                      ^~~~~~~~~~~~~~~~~~~
+tests/power_control_test.c:16:38: note: in definition of macro 'CHECK'
+   16 | #define CHECK(expression) do { if (!(expression)) { \
+      |                                      ^~~~~~~~~~
+tests/power_control_test.c:805:54: error: 'POWER_DIAG_CP_CONTROLLER' undeclared (first use in this function); did you mean 'POWER_FAULT_CONTROLLER'?
+  805 |     CHECK(power_diag.fault.profile.checkpoint_cycles[POWER_DIAG_CP_CONTROLLER] == 900U);
+      |                                                      ^~~~~~~~~~~~~~~~~~~~~~~~
+tests/power_control_test.c:16:38: note: in definition of macro 'CHECK'
+   16 | #define CHECK(expression) do { if (!(expression)) { \
+      |                                      ^~~~~~~~~~
+tests/power_control_test.c:806:54: error: 'POWER_DIAG_CP_MAP' undeclared (first use in this function)
+  806 |     CHECK(power_diag.fault.profile.checkpoint_cycles[POWER_DIAG_CP_MAP] == 900U);
+      |                                                      ^~~~~~~~~~~~~~~~~
+tests/power_control_test.c:16:38: note: in definition of macro 'CHECK'
+   16 | #define CHECK(expression) do { if (!(expression)) { \
+      |                                      ^~~~~~~~~~
+tests/power_control_test.c:807:54: error: 'POWER_DIAG_CP_WRITE' undeclared (first use in this function)
+  807 |     CHECK(power_diag.fault.profile.checkpoint_cycles[POWER_DIAG_CP_WRITE] == 0U);
+      |                                                      ^~~~~~~~~~~~~~~~~~~
+tests/power_control_test.c:16:38: note: in definition of macro 'CHECK'
+   16 | #define CHECK(expression) do { if (!(expression)) { \
+      |                                      ^~~~~~~~~~
+tests/power_control_test.c:831:39: error: 'POWER_DIAG_CONTEXT_HARDWARE_IRQ' undeclared (first use in this function)
+  831 |     CHECK(power_diag.fault.context == POWER_DIAG_CONTEXT_HARDWARE_IRQ);
+      |                                       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+tests/power_control_test.c:16:38: note: in definition of macro 'CHECK'
+   16 | #define CHECK(expression) do { if (!(expression)) { \
+      |                                      ^~~~~~~~~~

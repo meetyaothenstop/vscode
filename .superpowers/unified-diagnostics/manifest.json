@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-25",
+  "target": "bench12_unified_diag",
+  "home": "12V UNIFIED DIAG",
+  "host_cases_passed": 18,
+  "arm_builds": "diagnostic and uninstrumented comparison: 0 errors, 0 warnings",
+  "board_downloaded": false,
+  "board_root_cause_fixed": false,
+  "files": [
+    {
+      "path": "Core\\Inc\\power_control.h",
+      "sha256": "03B43B2AECA8A7890934BD625E47D4C92F6E1D8B2B80BE225A08FB5E6EBE609D"
+    },
+    {
+      "path": "Core\\Inc\\power_build_config.h",
+      "sha256": "04EBA054FA943AFD171FFF4DB2B21D1BE9E06AA1D2837ACCF3F1DAB080BAF417"
+    },
+    {
+      "path": "Core\\Src\\power_control.c",
+      "sha256": "29707686A877EBD67F89E3C6C961D79A3DAAA42F693FC78B1726A39830C1DB69"
+    },
+    {
+      "path": "Core\\Src\\power_menu.c",
+      "sha256": "D15DB402B3AA679F2F4D2AEC40B3E7192DCBE5B8AC86F42F74B17706A2C97DA3"
+    },
+    {
+      "path": "tests\\power_control_test.c",
+      "sha256": "CB9D8BE936348C8856077D266B01C98FF5423372BFAFF7CD1F1339E86D9F96FD"
+    },
+    {
+      "path": "tests\\power_hal\\stm32g4xx_hal.h",
+      "sha256": "954AA5C19617701BF6855271316B627D5836FE2C1C5250ADA0C3F997107EDF6C"
+    },
+    {
+      "path": "tests\\bench12_menu_test.c",
+      "sha256": "68F8CC9F0FA34717DBE9E95A3FCF8D9E8234ED9B3B2F4815B3704ADE58010A69"
+    },
+    {
+      "path": "tests\\run_tests.ps1",
+      "sha256": "5FC2A6D8AE621866D929777A42DA514DB3CF2190A42D93634E30C4C5D6B02715"
+    },
+    {
+      "path": "MDK-ARM\\bench12_unified_diag.uvprojx",
+      "sha256": "D1EA6176EDFF265E64E25570E770B213641F49B67CC2328F0B84266B871CB33D"
+    },
+    {
+      "path": "MDK-ARM\\bench12_unified_diag.uvoptx",
+      "sha256": "1A98FAFF477DBDA4A5FDA2AD9A3242372BAA421469A66536A3B097C1B4EA8068"
+    },
+    {
+      "path": "MDK-ARM\\bench12_unified_diag\\bidreaction_bench12_unified_diag.hex",
+      "sha256": "A270826358A6EC16FA2A009A306EA1067673321A0908FF313275CDAD8D4ACD9E"
+    },
+    {
+      "path": "docs\\统一诊断版测试.md",
+      "sha256": "2D86B74144C850B7D25D9B87A230F4434D55030FE87EB2FB6B57A73CD4BCF854"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+#include "adc_measure.h"
+
+#include <assert.h>
+#include <math.h>
+
+static void near(double actual, double expected, double tolerance)
+{
+    assert(fabs(actual - expected) < tolerance);
+}
+
+int main(void)
+{
+    AdcMeasurements measurements;
+
+    /* A divider output of 2.256 V represents approximately 48 V. */
+    ADC_ConvertRaw(2800, 1400, 3102, &measurements);
+    near(measurements.v_high, 48.0, 0.05);
+    near(measurements.v_low, 24.0, 0.05);
+    near(measurements.il, 0.0, 0.01);
+
+    /* Existing PCB: 5 mOhm x 20 V/V = 0.1 V/A, centered at 2.5 V. */
+    ADC_ConvertRaw(0, 0, 4095, &measurements);
+    near(measurements.il, 8.0, 0.02);
+    ADC_ConvertRaw(0, 0, 2109, &measurements);
+    near(measurements.il, -8.0, 0.02);
+
+    ADC_ConvertRaw(4095, 4095, 3102, &measurements);
+    near(measurements.v_high, 3.3 / 0.047, 0.001);
+    return 0;
+}

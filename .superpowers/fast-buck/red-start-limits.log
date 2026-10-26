@@ -1,0 +1,4 @@
+Buck reference bitwise trajectory match: 540000 samples
+Restricted Buck mode rejection and restart: PASS
+forward_buck_equivalence_test: PASS
+tests/power_control_test.c:272: request(1U, 6.0f) (state=4, fault=0x80, outputs=0x0)

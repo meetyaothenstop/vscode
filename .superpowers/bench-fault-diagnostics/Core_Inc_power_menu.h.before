@@ -1,0 +1,45 @@
+#ifndef POWER_MENU_H
+#define POWER_MENU_H
+
+#include <stdint.h>
+
+enum { MENU_ROWS = 8, MENU_COLUMNS = 21 };
+typedef enum { MENU_HOME, MENU_PARAMETERS } MenuPage;
+typedef enum { MENU_FORWARD, MENU_REVERSE } MenuDirection;
+typedef enum { MENU_KEY_NONE, MENU_KEY_UP, MENU_KEY_DOWN,
+               MENU_KEY_OK, MENU_KEY_BACK } MenuKey;
+typedef enum { MENU_MODE_EQUAL, MENU_MODE_BUCK, MENU_MODE_BOOST } MenuMode;
+typedef enum { MENU_IDLE, MENU_STARTING, MENU_RUNNING, MENU_FAULT } MenuState;
+typedef enum { MENU_ACTION_NONE, MENU_ACTION_START, MENU_ACTION_STOP } MenuAction;
+typedef enum { MENU_NOTICE_NONE, MENU_NOTICE_EQUAL,
+               MENU_NOTICE_REJECTED, MENU_NOTICE_LOCKED } MenuNotice;
+
+typedef struct { uint16_t input_volts, output_volts; } MenuSettings;
+typedef struct {
+    MenuState state;
+    uint32_t fault;
+    uint8_t pending, valid;
+    float v_left, v_right, il;
+} MenuTelemetry;
+typedef struct {
+    MenuAction action;
+    MenuMode mode;
+    float target_volts;
+} MenuRequest;
+typedef struct {
+    MenuPage page;
+    MenuDirection direction;
+    uint8_t selection, editing;
+    uint16_t edit_volts;
+    MenuNotice notice;
+    MenuSettings settings[2];
+} PowerMenu;
+typedef struct { char rows[MENU_ROWS][MENU_COLUMNS + 1]; } MenuFrame;
+
+void Menu_Init(PowerMenu *menu);
+MenuMode Menu_Mode(const PowerMenu *menu);
+MenuRequest Menu_HandleKey(PowerMenu *menu, MenuKey key, const MenuTelemetry *data);
+void Menu_StartResult(PowerMenu *menu, int accepted);
+void Menu_Render(const PowerMenu *menu, const MenuTelemetry *data, MenuFrame *frame);
+
+#endif

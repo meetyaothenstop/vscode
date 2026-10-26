@@ -1,0 +1,68 @@
+# 双向硬件过流保护：接线与验证
+
+## 当前状态
+
+已加入 STM32G474CBT6 的 DAC3、COMP1/COMP2、HRTIM Fault1/Fault4 配置，以及故障锁存、清除和启动检查。
+
+**默认 `POWER_OCP_WIRING_CONFIRMED=0`：不改动 PB1/PA7，不启用未接线的比较器。OLED、按键、ADC 可用，但 start 被拒绝并显示 `FAULT:512`，四路 PWM 保持关闭。** 这与上一版允许启动的固件不同。
+
+工程中 PB1、PA7 尚未配置，实物是否空闲仍待确认。当前只完成软件与编译/主机测试，没有接线、烧录或实板保护验证。
+
+## 增加的连接
+
+保留 INA240 OUT→H3→ADC_L→PA2，把 **H3 后的 ADC_L 低压采样信号**再分到 PB1、PA7；INA240 与 MCU 共地。
+
+| 同一个采样信号 | 用途 | 故障来源 |
+| --- | --- | --- |
+| PA2（保留） | ADC1_IN3：显示及软件保护 | 原软件检查 |
+| PB1（新增） | COMP1_INP / IO2：上阈值 | HRTIM Fault4 |
+| PA7（新增） | COMP2_INP / IO1：下阈值 | HRTIM Fault1 |
+
+两路 Fault 均作用于 TimerA、TimerB，故障时 PA8、PA9、PA10、PA11 全部进入低电平。片内 DAC3 提供阈值，无需将 DAC3 输出接到外部。
+
+STM32G4 没有共用一个输入脚的比较器窗口模式，因此两条新增信号连接都需要。映射依据 [ST RM0440 Table228](https://www.st.com/resource/en/reference_manual/dm00355726-stm32g4-series-advanced-arm-based-32-bit-mcus-stmicroelectronics.pdf#page=888)。
+
+INA240 为5V供电，OUT可能超过3.3V。需核对 PA2 和新增 PB1/PA7 的模拟输入限压/保护，保证信号不超过实际 VDDA；故障关断本身不会钳住 INA240 OUT。[STM32G474 Table79](https://www.st.com/resource/en/datasheet/stm32g474cb.pdf#page=163)
+
+## 初始参数
+
+配置入口：`Core/Inc/power_protection.h`。
+
+| 参数 | 值 |
+| --- | --- |
+| 硬件电流阈值 | 约 ±7A，首次调试值 |
+| 零电流电压 / 灵敏度 | 2500mV / 100mV每A |
+| DAC参考假设 | 3300mV |
+| 上阈值 / DAC3_CH1 | 3200mV / 3972 |
+| 下阈值 / DAC3_CH2 | 1800mV / 2234 |
+| 比较器回差 | 10mV |
+| Fault滤波、消隐 | 初始不启用 |
+
+DAC码按 `VREF+ × DOR /4096` 计算。±7A低于软件采样绝对过流阈值7.5A，纹波峰值也可能触发。该值不代表板级额定能力；需根据实际零点、增益、VREF+/VDDA、器件允许电流和纹波校准。
+
+## 接线后如何启用和验证
+
+1. 确认 PB1、PA7 实物可用，完成接线及模拟输入保护。先保持主功率母线断开、门极驱动隔离。
+2. 将头文件中的 `POWER_OCP_WIRING_CONFIRMED` 改为1并重新编译。`power_status.protection_ready=1` 仅表示外设配置成功，不检测飞线是否存在，也不证明实际保护效果。
+3. 先验证检测与锁存：断开 H3，在 H3 后的 MCU 采样侧施加共地且不超过 VDDA 的已知电压；PA2/PB1/PA7仍共接该节点。这样不会把测试电压回灌到 INA240 OUT。
+4. 约2.5V应无硬件过流；超过约3.2V或低于约1.8V，应出现 `FAULT:256`，四路保持关闭。实际切换点受回差、零点及参考误差影响。
+5. 故障来源有效时，`power_command=3` 不得清除。恢复约2.5V后显式清除应回 STOPPED，不能自动启动。分别验证上、下阈值，测试后撤掉注入源并恢复H3。
+6. 上述只验证检测与锁存。还需在功率级隔离的专门联调条件下，测量有 PWM 时四路关断、无自动恢复及实际延迟。普通固件仍执行原有输入、输出残压和电流等启动检查；实测通过后再低压、限流做功率测试。
+
+`MDK-ARM/ocp_verified_build.uvprojx` 是确认宏1的**编译验证副本**，输出独立目录。名称不表示实板已验证。默认主工程 `bidreaction.uvprojx` 仍以头文件确认宏0构建；验证副本的编译宏定义优先于头文件默认值。
+
+## 故障和行为
+
+- `512`：保护未就绪，默认未确认接线，拒绝启动。
+- `256`：硬件故障来源有效，或 HRTIM 已捕获短故障脉冲。可与原故障码按位组合。
+- 短故障消失后标志保持锁存；使能输出前后均检查，发现故障立即撤销使能并中止状态切换。实际边沿与关断延迟仍需示波器验证。
+- 故障 IRQ 屏蔽后续故障中断请求，硬件关断路径保持有效。安全清除后重开中断，不重开 PWM；随后需手动 start，仍受冷启动条件约束。
+- 外设初始化失败保持输出关闭。排查后复位；不把重复初始化作为故障恢复接口。
+
+## 验证边界
+
+硬件路径无需等待 ADC 或 CPU 中断，但完整响应还经过 INA240、输入 RC、比较器、HRTIM 和驱动。INA240A1 带宽约400kHz，不能以片内比较器的纳秒级指标代表整条通路延迟；必须实测电流和门极波形。[TI INA240](https://www.ti.com/lit/ds/symlink/ina240.pdf#page=5)
+
+主机测试覆盖确认/未确认配置、DAC/比较器参数、两路Fault、原始极性、短脉冲锁存、清除竞争、15种HAL失败位置，以及启动/自举/准备/切换/HOLD/四种模式中的故障。主机测试不能证明模拟精度、抗噪声及物理传播延迟。本次未进行功率板操作。
+
+最终验证：12组主机测试PASS；默认/启用配置Keil均0错误0警告。日志分别为 `.superpowers/hardware-overcurrent/host_tests.log`、`MDK-ARM/ocp_unconfirmed_build.log`、`MDK-ARM/ocp_verified_build.log`。

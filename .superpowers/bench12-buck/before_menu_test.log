@@ -1,0 +1,1 @@
+Assertion failed: menu.settings[MENU_FORWARD].output_volts == 6U, file tests/bench12_menu_test.c, line 14

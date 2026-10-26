@@ -1,0 +1,62 @@
+{
+  "target": "bench12_buck_fast",
+  "date": "2026-10-26",
+  "host_test_groups": 25,
+  "reference_samples": 540000,
+  "arm_errors": 0,
+  "arm_warnings": 0,
+  "start_abs_current_strict_A": 0.5,
+  "start_output_max_V": 1.0,
+  "write_budget_cycles": 840,
+  "hardware_verified": false,
+  "artifacts": [
+    {
+      "path": "Core/Src/forward.c",
+      "sha256": "DF9BAD7F039310E159C205F2D15CFA8BCC25ECC583BC27736C7902761CC7ED51"
+    },
+    {
+      "path": "Core/Src/power_control.c",
+      "sha256": "BE89F8B4AD5192649C4D96B358462AC30D5FA6E995F8B32EF4103C65AD4E5458"
+    },
+    {
+      "path": "Core/Src/power_menu.c",
+      "sha256": "EE88FE01BE9FDCD9D206E1283D52E85FEBA175FB4599DB2BA4CC0BB438F4CC7B"
+    },
+    {
+      "path": "Core/Inc/power_build_config.h",
+      "sha256": "C68E5FDE36B92F9BF6FC5E505480CA5074402CF17B6035D549CDF02FB5BF3E54"
+    },
+    {
+      "path": "MDK-ARM/bench12_buck_fast.uvprojx",
+      "sha256": "B4AC6A12C8ACA369E9C7B7D2A75D090DA155FE147E935C0FF93885FA101A2332"
+    },
+    {
+      "path": "MDK-ARM/bench12_buck_fast.uvoptx",
+      "sha256": "C61AE64B0EA6C391C9F0034A72F578BDA6142EB48B5FA34757633CD516E59107"
+    },
+    {
+      "path": "MDK-ARM/bench12_ccm_diag.sct",
+      "sha256": "E5DEF42149803A8C01693FBC9950ACBBEA2E01DAAE28EF37A00CBD091FB36881"
+    },
+    {
+      "path": "MDK-ARM/bench12_buck_fast/bidreaction_bench12_buck_fast.axf",
+      "sha256": "6C6BA018B681D91B07D2BFA5533C5966C4A439437A2511081E04EC4D3B0211F6"
+    },
+    {
+      "path": "MDK-ARM/bench12_buck_fast/bidreaction_bench12_buck_fast.hex",
+      "sha256": "751B03ECE32AB4F754EF51D5A9549B5851451BB8B0AFEE95ED0688B33A692A05"
+    },
+    {
+      "path": "tests/forward_buck_equivalence_test.c",
+      "sha256": "A259E99B4A180959B4D47EC78D61BBBCC1C4D64B9CC26CF1CF6FF1B7C0B2FE59"
+    },
+    {
+      "path": "tests/power_control_test.c",
+      "sha256": "3411BEC36407D0D9EFE5BAC6F0907570EF8BE6D924D5A38B68A2D4F3CDD065E5"
+    },
+    {
+      "path": "tests/run_tests.ps1",
+      "sha256": "D3C4A6880C8BF965B0EFFF93273D08886D62231873ACF6F52DE8441AA82F31B0"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+Unified first-fault stages, fresh/stale samples, section delays, wrap and clear: PASS
+Cold output/current rechecked before bootstrap and high-side arming: PASS
+Bench valid Buck starts without fabricated hardware readiness; 0.5 A reference and 1.5 A trip: PASS
+Bench mode/voltage restrictions and existing startup/current/ADC/timing protections: PASS
+Bench debugger start/stop follows the same restricted backend: PASS

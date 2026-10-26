@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-26",
+  "target": "bench12_ccm_base",
+  "home": "12V CCM BASE",
+  "hex_sha256": "2C40DA551422BB1DB84931E28C56C1961E6F59A389E1E7B6987ACC424D224CEE",
+  "host_passed": 21,
+  "arm_errors": 0,
+  "arm_warnings": 0,
+  "ccm_bytes": 4228,
+  "ccm_load": "0x08007A70",
+  "unified_probes": false,
+  "canonical_timing_protection": true,
+  "board_downloaded": false,
+  "board_deadline_pass_verified": false
+}

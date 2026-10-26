@@ -1,0 +1,4 @@
+In file included from Core/Src/forward.c:10:
+Core/Inc/power_build_config.h:42:2: error: #error Fast Buck requires restricted 12 V bench, OLED mute and CCM placement.
+   42 | #error Fast Buck requires restricted 12 V bench, OLED mute and CCM placement.
+      |  ^~~~~

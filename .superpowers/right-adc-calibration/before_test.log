@@ -1,0 +1,1 @@
+Assertion failed: fabs(actual - expected) < tolerance, file tests/adc_measure_test.c, line 8

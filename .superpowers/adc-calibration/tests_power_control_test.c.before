@@ -1,0 +1,692 @@
+/* Host integration of the real backend, controllers, PWM mapper and ADC
+ * conversion. Register events are synthetic; no hardware is accessed.
+ * Example build:
+ * gcc -std=c11 -O2 -Wall -Wextra -Werror -Itests/power_hal -ICore/Inc 
+ *   tests/power_control_test.c Core/Src/power_control.c Core/Src/forward.c
+ *   Core/Src/reverse.c Core/Src/pwm_plan.c Core/Src/adc_measure.c -lm
+ */
+#include "power_control.h"
+#include "forward.h"
+#include "reverse.h"
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define CHECK(expression) do { if (!(expression)) { \
+    fprintf(stderr, "%s:%d: %s (state=%u, fault=0x%lx, outputs=0x%lx)\n", \
+        __FILE__, __LINE__, #expression, (unsigned)power_status.state, \
+        (unsigned long)power_status.fault, (unsigned long)enabled_outputs); \
+    exit(EXIT_FAILURE); \
+} } while (0)
+#define ALL_OUTPUTS (HRTIM_OUTPUT_TA1 | HRTIM_OUTPUT_TA2 | HRTIM_OUTPUT_TB1 | HRTIM_OUTPUT_TB2)
+#define LOW_OUTPUTS (HRTIM_OUTPUT_TA2 | HRTIM_OUTPUT_TB2)
+#define TIMER_A HRTIM_TIMERINDEX_TIMER_A
+#define TIMER_B HRTIM_TIMERINDEX_TIMER_B
+
+ADC_TypeDef test_adc1;
+HRTIM_TypeDef test_hrtim1;
+RCC_TypeDef test_rcc;
+CoreDebug_Type test_core_debug;
+DWT_Type test_dwt;
+uint32_t test_primask;
+static uint32_t enabled_outputs, active_left_compare, active_right_compare;
+static unsigned adc_channels[3], adc_config_count, counters_started;
+static unsigned protection_init_calls, protection_ready = 1U, protection_irq_masked;
+static uint32_t protection_latched, protection_active;
+static unsigned protection_fault_on_poll;
+static unsigned protection_fault_after_safe_poll;
+
+HAL_StatusTypeDef PowerProtection_Init(HRTIM_HandleTypeDef *timer)
+{
+    CHECK(timer->Instance == HRTIM1);
+    ++protection_init_calls;
+    return HAL_OK;
+}
+int PowerProtection_IsReady(void) { return (int)protection_ready; }
+uint32_t PowerProtection_FaultPending(void)
+{
+    if (protection_fault_on_poll && --protection_fault_on_poll == 0U)
+        protection_latched |= 8U;
+    uint32_t result = protection_latched | protection_active;
+    if (protection_fault_after_safe_poll && --protection_fault_after_safe_poll == 0U) {
+        protection_latched |= 8U;
+        enabled_outputs = 0U; /* Hardware reacted after the register snapshot. */
+    }
+    return result;
+}
+void PowerProtection_MaskIRQ(void) { protection_irq_masked = 1U; }
+int PowerProtection_Acknowledge(void)
+{
+    if (protection_active) return 0;
+    protection_latched = 0U;
+    protection_irq_masked = 0U;
+    return 1;
+}
+
+uint32_t HAL_RCC_GetHCLKFreq(void) { return 150000000U; }
+HAL_StatusTypeDef HAL_ADCEx_InjectedConfigChannel(ADC_HandleTypeDef *adc, ADC_InjectionConfTypeDef *cfg)
+{
+    CHECK(adc->Instance == ADC1 && cfg->InjectedRank >= 1U && cfg->InjectedRank <= 3U);
+    CHECK(cfg->InjectedNbrOfConversion == 3U);
+    /* RM0440: ADC1 injected conversions cannot use HRTIM_TRG1 (ADC3/4/5
+     * only). Reject that route even though the host can synthesize JEOS. */
+    CHECK(cfg->ExternalTrigInjecConv == ADC_EXTERNALTRIGINJEC_HRTIM_TRG2);
+    CHECK(cfg->ExternalTrigInjecConvEdge == ADC_EXTERNALTRIGINJECCONV_EDGE_RISING);
+    adc_channels[cfg->InjectedRank - 1U] = cfg->InjectedChannel;
+    ++adc_config_count;
+    return HAL_OK;
+}
+HAL_StatusTypeDef HAL_ADCEx_InjectedStart(ADC_HandleTypeDef *adc)
+{ CHECK(adc->Instance == ADC1); return HAL_OK; }
+HAL_StatusTypeDef HAL_HRTIM_WaveformCompareConfig(HRTIM_HandleTypeDef *timer, uint32_t index,
+    uint32_t unit, HRTIM_CompareCfgTypeDef *cfg)
+{
+    CHECK(timer->Instance == HRTIM1 && index == TIMER_A && unit == HRTIM_COMPAREUNIT_2);
+    HRTIM1->sTimerxRegs[index].CMP2xR = cfg->CompareValue;
+    return HAL_OK;
+}
+HAL_StatusTypeDef HAL_HRTIM_ADCTriggerConfig(HRTIM_HandleTypeDef *timer, uint32_t index,
+    HRTIM_ADCTriggerCfgTypeDef *cfg)
+{
+    CHECK(timer->Instance == HRTIM1 && index == HRTIM_ADCTRIGGER_2);
+    CHECK(cfg->UpdateSource == HRTIM_ADCTRIGGERUPDATE_TIMER_A);
+    CHECK(cfg->Trigger == HRTIM_ADCTRIGGEREVENT24_TIMERA_CMP2);
+    return HAL_OK;
+}
+HAL_StatusTypeDef HAL_HRTIM_WaveformCounterStart(HRTIM_HandleTypeDef *timer, uint32_t counters)
+{
+    CHECK(timer->Instance == HRTIM1);
+    counters_started = counters;
+    return HAL_OK;
+}
+void HAL_NVIC_SetPriority(int irq, uint32_t preempt, uint32_t sub)
+{ CHECK(irq == HRTIM1_TIMB_IRQn && preempt == 0U && sub == 0U); }
+void HAL_NVIC_ClearPendingIRQ(int irq) { CHECK(irq == HRTIM1_TIMB_IRQn); }
+void HAL_NVIC_EnableIRQ(int irq) { CHECK(irq == HRTIM1_TIMB_IRQn); }
+
+/* OENR/ODISR are write strobes on silicon. Clear their last observed writes
+ * before each API/IRQ and apply the new writes to a separate effective mask.
+ * A simultaneous disable always wins in this fixture. */
+static void before_call(void)
+{
+    HRTIM1->sCommonRegs.OENR = 0U;
+    HRTIM1->sCommonRegs.ODISR = 0U;
+}
+static void after_call(void)
+{
+    enabled_outputs |= HRTIM1->sCommonRegs.OENR;
+    enabled_outputs &= ~HRTIM1->sCommonRegs.ODISR;
+    CHECK(test_primask == 0U);
+    CHECK((HRTIM1->sCommonRegs.CR1 & (HRTIM_CR1_TAUDIS | HRTIM_CR1_TBUDIS)) == 0U);
+}
+static uint16_t raw_voltage(float volts)
+{ return (uint16_t)lroundf(volts * 4095.0f * 0.047f / 3.3f); }
+static uint16_t raw_current(float amps)
+{ return (uint16_t)lroundf((amps + 25.0f) * 4095.0f * 0.1f / 3.3f); }
+
+static void irq(float left, float right, float il, uint32_t adc_flags,
+                uint32_t elapsed_cycles, uint32_t counter_ticks)
+{
+    /* The next period's hardware preload update happens before its IRQ.
+     * CYCCNT moves by one 150 kHz period, while execution itself is free
+     * in this register fixture; elapsed ISR timing needs board validation. */
+    active_left_compare = HRTIM1->sTimerxRegs[TIMER_B].CMP1xR;
+    active_right_compare = HRTIM1->sTimerxRegs[TIMER_A].CMP1xR;
+    DWT->CYCCNT += elapsed_cycles;
+    HRTIM1->sTimerxRegs[TIMER_B].CNTxR = counter_ticks;
+    HRTIM1->sTimerxRegs[TIMER_B].TIMxISR = HRTIM_TIMISR_REP;
+    ADC1->JDR1 = raw_current(il);
+    ADC1->JDR2 = raw_voltage(left);
+    ADC1->JDR3 = raw_voltage(right);
+    /* ADC ISR is supplied afresh each time. The ADC W1C write itself does
+     * not need emulation because the next period replaces this register. */
+    ADC1->ISR = adc_flags;
+    before_call();
+    Power_TimerIRQ();
+    after_call();
+}
+static void period(float left, float right, float il)
+{ irq(left, right, il, ADC_ISR_JEOS, 1000U, 640U); }
+static int request(unsigned mode, float target)
+{
+    int accepted;
+    before_call();
+    accepted = Power_RequestStart(mode, target);
+    after_call();
+    return accepted;
+}
+static void stop(void)
+{ before_call(); Power_Stop(); after_call(); }
+static void clear_fault(void)
+{ before_call(); Power_ClearFault(); after_call(); }
+static void service(void)
+{
+    AdcMeasurements measurements;
+    before_call();
+    Power_Service(&measurements);
+    after_call();
+    CHECK(power_command == POWER_CMD_NONE);
+    CHECK(fabs(measurements.v_high - power_status.v_left) < 0.0001);
+    CHECK(fabs(measurements.v_low - power_status.v_right) < 0.0001);
+    CHECK(fabs(measurements.il - power_status.il) < 0.0001);
+}
+static void stopped_samples(float left, float right, float il)
+{
+    stop();
+    clear_fault();
+    CHECK(power_status.state == POWER_STOPPED && power_status.fault == 0U);
+    CHECK(!Power_IsStartPending() && enabled_outputs == 0U);
+    period(left, right, il);
+    period(left, right, il);
+    CHECK(power_status.state == POWER_STOPPED && enabled_outputs == 0U);
+    CHECK(Power_SamplesAreValid());
+}
+static void check_plan(unsigned mode)
+{
+    PwmPlan plan;
+    if (mode >= 3U) {
+        CHECK(PWM_MakeReversePlan(reverse_Y.D_cm_R, reverse_Y.BOOST_RUN_R, &plan));
+        CHECK(fabsf(power_status.d_cmd - reverse_Y.D_cm_R) < 0.000001f);
+    } else {
+        CHECK(PWM_MakePlan(forward_Y.D_cmd, forward_Y.BOOST_RUN, &plan));
+        CHECK(fabsf(power_status.d_cmd - forward_Y.D_cmd) < 0.000001f);
+    }
+    CHECK(power_status.left_compare == plan.left_compare);
+    CHECK(power_status.right_compare == plan.right_compare);
+    CHECK(HRTIM1->sTimerxRegs[TIMER_B].CMP1xR == plan.left_compare);
+    CHECK(HRTIM1->sTimerxRegs[TIMER_A].CMP1xR == plan.right_compare);
+}
+static void arm_pending(unsigned mode, float left, float right)
+{
+    CHECK(Power_IsStartPending() && enabled_outputs == 0U);
+    for (unsigned n = 1U; n <= 30U; ++n) {
+        period(left, right, 0.0f);
+        CHECK(power_status.state == POWER_BOOTSTRAP);
+        CHECK(enabled_outputs == LOW_OUTPUTS);
+        CHECK(HRTIM1->sTimerxRegs[TIMER_A].CMP1xR == PWM_MIN_COMPARE_TICKS);
+        CHECK(HRTIM1->sTimerxRegs[TIMER_B].CMP1xR == PWM_MIN_COMPARE_TICKS);
+    }
+    period(left, right, 0.0f);
+    CHECK(power_status.state == POWER_ARMING && enabled_outputs == LOW_OUTPUTS);
+    /* Initial preload must be mirrored before any high side is enabled. */
+    if (mode >= 3U) {
+        CHECK(HRTIM1->sTimerxRegs[TIMER_B].CMP1xR == 28160U);
+        CHECK(HRTIM1->sTimerxRegs[TIMER_A].CMP1xR == 0U);
+    } else {
+        CHECK(HRTIM1->sTimerxRegs[TIMER_B].CMP1xR == PWM_MIN_COMPARE_TICKS);
+        CHECK(HRTIM1->sTimerxRegs[TIMER_A].CMP1xR == 28160U);
+    }
+    period(left, right, 0.0f);
+    CHECK(power_status.state == POWER_ARMING && enabled_outputs == LOW_OUTPUTS);
+    period(left, right, 0.0f);
+    CHECK(power_status.state == POWER_RUNNING && enabled_outputs == ALL_OUTPUTS);
+    CHECK(!Power_IsStartPending() && power_status.fault == 0U);
+    check_plan(mode);
+}
+static void start_running(unsigned mode, float source, float target)
+{
+    float left = mode >= 3U ? 0.0f : source;
+    float right = mode >= 3U ? source : 0.0f;
+    stopped_samples(left, right, 0.0f);
+    CHECK(request(mode, target));
+    arm_pending(mode, left, right);
+}
+static void expect_fault(uint32_t fault)
+{
+    CHECK(power_status.state == POWER_FAULT);
+    CHECK((power_status.fault & fault) != 0U);
+    CHECK(enabled_outputs == 0U && !Power_IsStartPending());
+}
+
+static void cold_boot(void)
+{
+    ADC_HandleTypeDef adc = {ADC1};
+    HRTIM_HandleTypeDef timer = {HRTIM1};
+    RCC->APB2ENR = RCC_APB2ENR_HRTIM1EN;
+    enabled_outputs = ALL_OUTPUTS; /* Init must force even a stale enable off. */
+    before_call();
+    CHECK(Power_Init(&adc, &timer) == HAL_OK);
+    after_call();
+    CHECK(power_status.state == POWER_STOPPED && power_status.samples == 0U);
+    CHECK(enabled_outputs == 0U && !Power_IsStartPending() && !Power_SamplesAreValid());
+    CHECK(protection_init_calls == 1U);
+    CHECK(adc_config_count == 3U && adc_channels[0] == ADC_CHANNEL_3);
+    CHECK(adc_channels[1] == ADC_CHANNEL_1 && adc_channels[2] == ADC_CHANNEL_2);
+    CHECK(counters_started == (HRTIM_TIMERID_TIMER_A | HRTIM_TIMERID_TIMER_B));
+    CHECK(HRTIM1->sTimerxRegs[TIMER_A].CMP2xR == PWM_PERIOD_TICKS / 4U);
+    CHECK((HRTIM1->sTimerxRegs[TIMER_B].TIMxDIER & HRTIM_TIMDIER_REPIE) != 0U);
+    period(24.0f, 0.0f, 0.0f);
+    CHECK(!request(1U, 12.0f)); /* One valid conversion cannot arm. */
+    expect_fault(POWER_FAULT_START);
+    stopped_samples(24.0f, 0.0f, 0.0f);
+    for (unsigned i = 0U; i < 5U; ++i) period(24.0f, 0.0f, 0.0f);
+    CHECK(power_status.state == POWER_STOPPED && enabled_outputs == 0U);
+    puts("Cold boot, sample qualification and idle outputs: PASS");
+}
+static void forward_regressions(void)
+{
+    _Static_assert(POWER_STOPPED == 0 && POWER_BOOTSTRAP == 1 && POWER_ARMING == 2 &&
+                   POWER_RUNNING == 3 && POWER_FAULT == 4, "existing state values changed");
+    _Static_assert(POWER_CMD_START_BOOST == 1 && POWER_CMD_STOP == 2 &&
+                   POWER_CMD_CLEAR_FAULT == 3 && POWER_CMD_START_BUCK == 4,
+                   "existing debugger commands changed");
+    start_running(1U, 24.0f, 12.0f);
+    CHECK(power_status.right_compare == 28160U);
+    CHECK(power_status.left_compare < power_status.right_compare);
+    period(24.0f, 0.0f, 2.0f);
+    CHECK(power_status.state == POWER_RUNNING && enabled_outputs == ALL_OUTPUTS);
+    period(24.0f, 0.0f, -1.2f);
+    expect_fault(POWER_FAULT_REVERSE);
+    start_running(2U, 12.0f, 36.0f);
+    CHECK(forward_Y.EN_F_BOOST && !forward_Y.EN_F_BUCK);
+    CHECK(!forward_Y.BOOST_RUN); /* Cold Boost starts in Buck precharge. */
+    period(12.0f, 0.0f, 7.6f);
+    expect_fault(POWER_FAULT_CURRENT);
+    stopped_samples(24.0f, 0.4f, 0.0f);
+    CHECK(!request(1U, 12.0f));
+    expect_fault(POWER_FAULT_START);
+    puts("Forward Buck/Boost startup and polarity regressions: PASS");
+}
+static void reverse_startup_and_current(void)
+{
+    start_running(3U, 24.0f, 12.0f);
+    CHECK(reverse_Y.EN_R_BUCK && !reverse_Y.EN_R_BOOST);
+    CHECK(power_status.left_compare == 28160U);
+    CHECK(power_status.right_compare < power_status.left_compare);
+    period(0.0f, 24.0f, -2.0f);
+    CHECK(power_status.state == POWER_RUNNING && power_status.fault == 0U);
+    CHECK(enabled_outputs == ALL_OUTPUTS && reverse_U.IL < -1.9f);
+    check_plan(3U);
+    period(0.0f, 24.0f, -7.6f);
+    expect_fault(POWER_FAULT_CURRENT);
+    start_running(3U, 24.0f, 12.0f);
+    /* Reverse polarity is qualified for 16 periods so fixed-phase current
+     * ripple at light load does not latch a directional fault. A healthy
+     * sample must reset that counter. Absolute current trips stay immediate. */
+    for (unsigned n = 0U; n < 15U; ++n) {
+        period(0.0f, 24.0f, 1.2f);
+        CHECK(power_status.state == POWER_RUNNING && power_status.fault == 0U);
+    }
+    period(0.0f, 24.0f, -0.2f);
+    for (unsigned n = 0U; n < 15U; ++n) {
+        period(0.0f, 24.0f, 1.2f);
+        CHECK(power_status.state == POWER_RUNNING && power_status.fault == 0U);
+    }
+    period(0.0f, 24.0f, 1.2f);
+    expect_fault(POWER_FAULT_REVERSE);
+    start_running(4U, 12.0f, 36.0f);
+    CHECK(reverse_Y.EN_R_BOOST && !reverse_Y.EN_R_BUCK);
+    CHECK(!reverse_Y.BOOST_RUN_R);
+    period(0.0f, 12.0f, -2.0f);
+    CHECK(power_status.state == POWER_RUNNING && power_status.fault == 0U);
+    check_plan(4U);
+    period(0.0f, 12.0f, -7.6f);
+    expect_fault(POWER_FAULT_CURRENT);
+    puts("Reverse Buck/Boost mirrored startup and physical current trips: PASS");
+}
+static void reverse_bus_protection(void)
+{
+    start_running(3U, 24.0f, 12.0f);
+    period(13.5f, 24.0f, -0.2f);
+    expect_fault(POWER_FAULT_OUTPUT);
+    CHECK((power_status.fault & POWER_FAULT_INPUT) == 0U);
+    start_running(3U, 24.0f, 12.0f);
+    period(0.0f, 5.8f, -0.2f);
+    expect_fault(POWER_FAULT_INPUT);
+    CHECK((power_status.fault & POWER_FAULT_OUTPUT) == 0U);
+    start_running(3U, 24.0f, 12.0f);
+    period(0.0f, 40.2f, -0.2f);
+    expect_fault(POWER_FAULT_INPUT);
+    puts("Reverse left output OV and right source range: PASS");
+}
+static void start_rejections(void)
+{
+    const struct { unsigned mode; float left, right, il, target; } cases[] = {
+        {3U, 0.4f, 24.0f, 0.0f, 12.0f},
+        {4U, 0.4f, 12.0f, 0.0f, 36.0f},
+        {3U, 0.0f, 5.8f, 0.0f, 1.0f},
+        {3U, 0.0f, 40.2f, 0.0f, 12.0f},
+        {3U, 0.0f, 24.0f, -0.3f, 12.0f},
+        {3U, 0.0f, 24.0f, 0.3f, 12.0f},
+        {3U, 0.0f, 24.0f, 0.0f, 0.9f},
+        {4U, 0.0f, 12.0f, 0.0f, 36.1f},
+        {3U, 0.0f, 12.0f, 0.0f, 24.0f},
+        {4U, 0.0f, 24.0f, 0.0f, 12.0f},
+        {0U, 24.0f, 0.0f, 0.0f, 12.0f},
+        {5U, 0.0f, 24.0f, 0.0f, 12.0f},
+        {1U, 12.0f, 0.0f, 0.0f, 24.0f},
+        {2U, 24.0f, 0.0f, 0.0f, 12.0f}
+    };
+    for (unsigned i = 0U; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        stopped_samples(cases[i].left, cases[i].right, cases[i].il);
+        CHECK(!request(cases[i].mode, cases[i].target));
+        expect_fault(POWER_FAULT_START);
+    }
+    stopped_samples(0.0f, 6.1f, 0.0f);
+    CHECK(request(4U, 12.0f));
+    stop();
+    stopped_samples(0.0f, 39.9f, 0.0f);
+    CHECK(request(3U, 1.0f));
+    stop();
+    puts("Start qualification: bus direction, residual voltage, current, targets and modes: PASS");
+}
+static void boost_preload_changeover(void)
+{
+    unsigned observed_blank = 0U, observed_boost = 0U;
+    int previous_step_boost = 0;
+    start_running(4U, 12.0f, 36.0f);
+    /* A synthesized safe precharged output drives the real controller's
+     * filter and three-period delay, without changing its internal state. */
+    for (unsigned n = 0U; n < 1000U; ++n) {
+        uint32_t before_outputs = enabled_outputs;
+        previous_step_boost = reverse_Y.BOOST_RUN_R;
+        period(12.1f, 12.0f, -0.2f);
+        CHECK(power_status.state != POWER_FAULT);
+        if (reverse_Y.D_cm_R4 && !reverse_Y.BOOST_RUN_R) {
+            ++observed_blank;
+            CHECK((unsigned)power_status.state == 5U); /* appended POWER_CHANGEOVER */
+            CHECK(enabled_outputs == 0U);
+        }
+        if (reverse_Y.BOOST_RUN_R) {
+            check_plan(4U);
+            if (before_outputs == 0U && enabled_outputs == ALL_OUTPUTS) {
+                CHECK(previous_step_boost); /* first Boost preload has latched */
+                CHECK(active_right_compare == 28160U);
+                CHECK(active_left_compare >= PWM_MIN_COMPARE_TICKS);
+                CHECK(active_left_compare <= 28160U);
+                ++observed_boost;
+                CHECK(power_status.state == POWER_RUNNING);
+                break;
+            }
+            if (!previous_step_boost) CHECK(enabled_outputs == 0U);
+        }
+    }
+    CHECK(observed_blank > 0U && observed_boost == 1U);
+    puts("Reverse Boost all-off changeover waits for actual preload latch: PASS");
+}
+static void adc_and_timing_faults(void)
+{
+    stopped_samples(0.0f, 24.0f, 0.0f);
+    CHECK(request(3U, 12.0f));
+    irq(0.0f, 24.0f, 0.0f, 0U, 1000U, 640U);
+    expect_fault(POWER_FAULT_ADC);
+    CHECK(!Power_SamplesAreValid());
+    period(0.0f, 24.0f, 0.0f);
+    expect_fault(POWER_FAULT_ADC);
+    clear_fault();
+    irq(0.0f, 24.0f, 0.0f, 0U, 1000U, 640U);
+    CHECK(power_status.state == POWER_STOPPED && !Power_SamplesAreValid());
+    CHECK(!request(3U, 12.0f));
+    expect_fault(POWER_FAULT_START);
+    start_running(3U, 24.0f, 12.0f);
+    irq(0.0f, 24.0f, -0.2f, ADC_ISR_JEOS | ADC_ISR_JQOVF, 1000U, 640U);
+    expect_fault(POWER_FAULT_ADC);
+    start_running(4U, 12.0f, 36.0f);
+    irq(0.0f, 12.0f, -0.2f, ADC_ISR_JEOS, 2000U, 640U);
+    expect_fault(POWER_FAULT_TIMING);
+    start_running(1U, 24.0f, 12.0f);
+    irq(24.0f, 0.0f, 0.0f, ADC_ISR_JEOS, 1000U, 9000U);
+    expect_fault(POWER_FAULT_TIMING);
+    puts("ADC loss/overflow cancel starts; missed/late IRQ trips: PASS");
+}
+static void reverse_output_hold(void)
+{
+    unsigned waited, bootstrap_periods = 0U;
+    PwmPlan held_plan;
+    float entry_reference, resume_reference;
+    start_running(4U, 12.0f, 36.0f);
+    /* Exercise the real reference ramp and precharge delay. A sampled
+     * output above the final setpoint models the unloaded output condition
+     * that requires all-off regulation instead of an overvoltage trip. */
+    for (waited = 0U; waited < 40000U && (unsigned)power_status.state != 6U; ++waited) {
+        period(36.3f, 12.0f, 0.0f);
+        CHECK(power_status.state != POWER_FAULT);
+    }
+    CHECK(waited < 40000U && (unsigned)power_status.state == 6U); /* POWER_HOLD */
+    CHECK(enabled_outputs == 0U && !Power_IsStartPending());
+    CHECK(reverse_Y.BOOST_RUN_R);
+    entry_reference = power_status.v_reference;
+    CHECK(entry_reference < 35.0f); /* Overshoot protection also applies during the ramp. */
+    CHECK(!request(3U, 12.0f)); /* A held controller is still an active run. */
+    CHECK((unsigned)power_status.state == 6U && power_status.fault == 0U);
+    for (unsigned n = 0U; n < 128U; ++n) {
+        period(36.3f, 12.0f, 0.0f);
+        CHECK((unsigned)power_status.state == 6U && enabled_outputs == 0U);
+    }
+    CHECK(power_status.v_reference > entry_reference + 0.05f);
+    CHECK(power_status.v_reference == reverse_B.Saturation4);
+    for (unsigned n = 0U; n < 3U; ++n) {
+        period(36.0f, 12.0f, 0.0f);
+        CHECK((unsigned)power_status.state == 6U && enabled_outputs == 0U);
+    }
+    for (unsigned n = 0U; n < 3U; ++n) {
+        period(35.0f, 12.0f, -0.5f);
+        CHECK((unsigned)power_status.state == 6U && enabled_outputs == 0U);
+    }
+    period(35.0f, 12.0f, 0.0f);
+    CHECK(power_status.state == POWER_BOOTSTRAP && enabled_outputs == LOW_OUTPUTS);
+    resume_reference = power_status.v_reference;
+    CHECK(resume_reference > entry_reference);
+    /* HOLD continues to step the controller; capture its newest plan at
+     * the resume decision rather than freezing the plan at HOLD entry. */
+    CHECK(PWM_MakeReversePlan(reverse_Y.D_cm_R, 1, &held_plan));
+    ++bootstrap_periods;
+    while (power_status.state == POWER_BOOTSTRAP && bootstrap_periods <= 31U) {
+        period(35.0f, 12.0f, 0.0f);
+        if (power_status.state == POWER_BOOTSTRAP) {
+            ++bootstrap_periods;
+            CHECK(enabled_outputs == LOW_OUTPUTS);
+        }
+    }
+    CHECK(bootstrap_periods >= 29U && bootstrap_periods <= 30U);
+    CHECK(power_status.state == POWER_ARMING && enabled_outputs == LOW_OUTPUTS);
+    CHECK(reverse_Y.BOOST_RUN_R && power_status.v_reference == resume_reference);
+    /* A resume must retain the settled Boost duty. A cold Buck plan here
+     * would connect the bridges with the wrong voltage ratio. */
+    CHECK(HRTIM1->sTimerxRegs[TIMER_A].CMP1xR == held_plan.right_compare);
+    CHECK(HRTIM1->sTimerxRegs[TIMER_B].CMP1xR == held_plan.left_compare);
+    period(35.0f, 12.0f, 0.0f);
+    CHECK(power_status.state == POWER_ARMING && enabled_outputs == LOW_OUTPUTS);
+    period(35.0f, 12.0f, 0.0f);
+    CHECK(power_status.state == POWER_RUNNING && enabled_outputs == ALL_OUTPUTS);
+    CHECK(reverse_Y.BOOST_RUN_R && power_status.v_reference >= resume_reference);
+    CHECK(power_status.v_reference < resume_reference + 0.01f);
+    CHECK(active_right_compare == held_plan.right_compare);
+    CHECK(active_left_compare == held_plan.left_compare);
+    check_plan(4U);
+    period(36.3f, 12.0f, 0.0f);
+    CHECK((unsigned)power_status.state == 6U && enabled_outputs == 0U);
+    stop();
+    CHECK(power_status.state == POWER_STOPPED && !Power_IsStartPending());
+    for (unsigned n = 0U; n < 3U; ++n) period(35.0f, 12.0f, 0.0f);
+    CHECK(power_status.state == POWER_STOPPED && enabled_outputs == 0U);
+    /* Protection remains live while the output is held off. */
+    start_running(4U, 12.0f, 36.0f);
+    for (waited = 0U; waited < 40000U && (unsigned)power_status.state != 6U; ++waited) {
+        period(36.3f, 12.0f, 0.0f);
+        CHECK(power_status.state != POWER_FAULT);
+    }
+    CHECK((unsigned)power_status.state == 6U);
+    period(36.3f, 12.0f, -7.6f);
+    expect_fault(POWER_FAULT_CURRENT);
+    puts("Reverse output hold, residual current guard, Boost resume and Stop: PASS");
+}
+static void commands_stop_and_clear(void)
+{
+    const struct { uint32_t command; unsigned mode; float source, target; } cases[] = {
+        {1U, 2U, 12.0f, 36.0f}, {4U, 1U, 24.0f, 12.0f},
+        {5U, 3U, 24.0f, 12.0f}, {6U, 4U, 12.0f, 36.0f}
+    };
+    for (unsigned i = 0U; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        float left = cases[i].mode >= 3U ? 0.0f : cases[i].source;
+        float right = cases[i].mode >= 3U ? cases[i].source : 0.0f;
+        stopped_samples(left, right, 0.0f);
+        power_target_volts = cases[i].target;
+        power_command = cases[i].command;
+        service();
+        arm_pending(cases[i].mode, left, right);
+        power_command = 2U;
+        service();
+        CHECK(power_status.state == POWER_STOPPED && enabled_outputs == 0U);
+        for (unsigned n = 0U; n < 3U; ++n) period(left, right, 0.0f);
+        CHECK(power_status.state == POWER_STOPPED && !Power_IsStartPending());
+    }
+    stopped_samples(0.0f, 24.0f, 0.0f);
+    CHECK(request(3U, 12.0f));
+    stop(); /* Pending start is cancelled without an IRQ ever enabling lows. */
+    period(0.0f, 24.0f, 0.0f);
+    CHECK(power_status.state == POWER_STOPPED && enabled_outputs == 0U);
+    start_running(3U, 24.0f, 12.0f);
+    period(0.0f, 24.0f, -7.6f);
+    expect_fault(POWER_FAULT_CURRENT);
+    power_command = 2U;
+    service();
+    expect_fault(POWER_FAULT_CURRENT); /* Stop preserves a latched fault. */
+    power_command = 3U;
+    service();
+    CHECK(power_status.state == POWER_STOPPED && power_status.fault == 0U);
+    for (unsigned n = 0U; n < 3U; ++n) period(0.0f, 24.0f, 0.0f);
+    CHECK(enabled_outputs == 0U && !Power_IsStartPending());
+    puts("Debugger commands 1-6, stop/fault clear and no automatic restart: PASS");
+}
+static void hardware_fault_latch_and_readiness(void)
+{
+    stopped_samples(0.0f, 24.0f, 0.0f);
+    protection_ready = 0U;
+    CHECK(!request(3U, 12.0f));
+    expect_fault(512U); /* Hardware wiring has not been confirmed. */
+    CHECK(enabled_outputs == 0U);
+    clear_fault();
+    protection_ready = 1U;
+    protection_fault_on_poll = 2U; /* Fault interrupts foreground controller init. */
+    CHECK(!request(3U, 12.0f));
+    expect_fault(256U);
+    CHECK(!Power_IsStartPending());
+    clear_fault();
+    /* A captured pulse remains a fault even after the comparator returns safe. */
+    protection_latched = 8U;
+    CHECK(!request(3U, 12.0f));
+    expect_fault(256U);
+    CHECK(protection_irq_masked);
+    clear_fault();
+    CHECK(power_status.state == POWER_STOPPED && !Power_IsStartPending());
+    for (unsigned phase = 0U; phase < 3U; ++phase) {
+        stopped_samples(0.0f, 12.0f, 0.0f);
+        CHECK(request(4U, 36.0f));
+        if (phase < 2U) {
+            for (unsigned n = 0; n < (phase ? 31U : 1U); ++n)
+                period(0.0f, 12.0f, 0.0f);
+            CHECK(power_status.state == (phase ? POWER_ARMING : POWER_BOOTSTRAP));
+        } else {
+            arm_pending(4U, 0.0f, 12.0f);
+            unsigned n;
+            for (n = 0U; n < 1000U && power_status.state != POWER_CHANGEOVER; ++n)
+                period(12.2f, 12.0f, -0.2f);
+            CHECK(power_status.state == POWER_CHANGEOVER);
+        }
+        protection_latched = phase % 2U ? 8U : 1U;
+        before_call();
+        Power_FaultIRQ();
+        after_call();
+        expect_fault(256U);
+        clear_fault();
+        CHECK(power_status.state == POWER_STOPPED && enabled_outputs == 0U);
+    }
+    for (unsigned mode = 1U; mode <= 4U; ++mode) {
+        start_running(mode, mode % 2U ? 24.0f : 12.0f, mode % 2U ? 12.0f : 36.0f);
+        protection_active = mode % 2U ? 1U : 8U;
+        before_call();
+        Power_FaultIRQ();
+        after_call();
+        expect_fault(256U);
+        clear_fault();
+        expect_fault(256U); /* An active analog fault cannot be acknowledged. */
+        protection_active = 0U;
+        clear_fault();
+        CHECK(power_status.state == POWER_STOPPED && !Power_IsStartPending());
+        CHECK(enabled_outputs == 0U);
+    }
+    stopped_samples(0.0f, 12.0f, 0.0f);
+    CHECK(request(4U, 36.0f));
+    protection_latched = 1U;
+    /* Timer poll catches a fault even if common fault IRQ has not run and
+     * the injected ADC sequence is absent. Pending startup must be cancelled. */
+    irq(0.0f, 12.0f, 0.0f, 0U, 1000U, 640U);
+    expect_fault(256U);
+    clear_fault();
+    start_running(4U, 12.0f, 36.0f);
+    unsigned guard;
+    for (guard = 0; guard < 1000 && power_status.state != POWER_HOLD; ++guard)
+        period(36.3f, 12.0f, 0.0f);
+    CHECK(power_status.state == POWER_HOLD);
+    protection_latched = 8U;
+    period(36.3f, 12.0f, 0.0f);
+    expect_fault(256U);
+    clear_fault();
+    CHECK(power_status.state == POWER_STOPPED && enabled_outputs == 0U);
+    puts("Hardware protection readiness, pulse capture, active clear refusal and no restart: PASS");
+}
+static void hardware_enable_interleavings(void)
+{
+    /* A transient fault can arrive after the safe entry poll. It must not
+     * be overridden by an OENR later in that same (equal priority) IRQ. */
+    for (unsigned poll = 1U; poll <= 2U; ++poll) {
+        stopped_samples(0.0f, 24.0f, 0.0f);
+        CHECK(request(3U, 12.0f));
+        for (unsigned n = 0U; n < 32U; ++n) period(0.0f, 24.0f, 0.0f);
+        CHECK(power_status.state == POWER_ARMING);
+        protection_fault_after_safe_poll = poll;
+        period(0.0f, 24.0f, 0.0f);
+        CHECK(protection_fault_after_safe_poll == 0U);
+        expect_fault(256U);
+        clear_fault();
+        /* Pending cold start: the low-side bootstrap enable is guarded too. */
+        stopped_samples(0.0f, 12.0f, 0.0f);
+        CHECK(request(4U, 36.0f));
+        protection_fault_after_safe_poll = poll;
+        period(0.0f, 12.0f, 0.0f);
+        CHECK(protection_fault_after_safe_poll == 0U);
+        expect_fault(256U);
+        clear_fault();
+        /* Ready Boost compare plan: a disappeared fault must not be rearmed
+         * by the CHANGEOVER -> RUNNING transition. */
+        start_running(4U, 12.0f, 36.0f);
+        unsigned guard;
+        for (guard = 0U; guard < 1000U &&
+             !(power_status.state == POWER_CHANGEOVER && reverse_Y.BOOST_RUN_R); ++guard)
+            period(12.2f, 12.0f, -0.2f);
+        CHECK(power_status.state == POWER_CHANGEOVER && reverse_Y.BOOST_RUN_R);
+        protection_fault_after_safe_poll = poll;
+        period(12.2f, 12.0f, -0.2f);
+        CHECK(protection_fault_after_safe_poll == 0U);
+        expect_fault(256U);
+        clear_fault();
+        /* HOLD resume also enables the low sides after the entry poll. */
+        start_running(4U, 12.0f, 36.0f);
+        for (guard = 0U; guard < 1000U && power_status.state != POWER_HOLD; ++guard)
+            period(36.3f, 12.0f, 0.0f);
+        CHECK(power_status.state == POWER_HOLD);
+        protection_fault_after_safe_poll = poll;
+        period(35.0f, 12.0f, 0.0f);
+        CHECK(protection_fault_after_safe_poll == 0U);
+        expect_fault(256U);
+        clear_fault();
+    }
+    puts("Short faults around cold/bootstrap/arming/changeover/HOLD enables remain latched: PASS");
+}
+int main(void)
+{
+    cold_boot(); /* Power_Init runs exactly once, like the firmware. */
+    forward_regressions();
+    reverse_startup_and_current();
+    reverse_bus_protection();
+    start_rejections();
+    boost_preload_changeover();
+    adc_and_timing_faults();
+    reverse_output_hold();
+    commands_stop_and_clear();
+    hardware_fault_latch_and_readiness();
+    hardware_enable_interleavings();
+    puts("Real power backend host integration: PASS");
+    return EXIT_SUCCESS;
+}

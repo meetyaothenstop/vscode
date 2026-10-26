@@ -1,0 +1,42 @@
+#include "adc_measure.h"
+
+#include <assert.h>
+#include <math.h>
+
+static void near(double actual, double expected, double tolerance)
+{
+    assert(fabs(actual - expected) < tolerance);
+}
+
+int main(void)
+{
+    AdcMeasurements measurements;
+
+    /* Board reports: 11.83 V -> old display 11.57 V (~675 counts),
+     * 11.93 V -> old display 11.655 V (~680 counts). Both are preliminary
+     * single-region calibration points, not a full-range validation. */
+    ADC_ConvertRaw(675, 675, 3081, &measurements);
+    near(measurements.v_high, 11.83, 0.02);
+    /* Right port still uses its nominal 0.047 gain; do not copy the left
+     * correction onto a physically different, uncalibrated sense channel. */
+    near(measurements.v_low, 11.6089, 0.002);
+    near(measurements.il, 0.0, 0.01);
+    assert(measurements.raw_vh == 675 && measurements.raw_vl == 675 &&
+           measurements.raw_il == 3081);
+    ADC_ConvertRaw(680, 0, 3081, &measurements);
+    near(measurements.v_high, 11.93, 0.02);
+
+    /* Measured VDDA 3.31 V / zero-current OUT 2.49 V. Nominal sensitivity
+     * stays 0.1 V/A until checked with an independently known current. */
+    ADC_ConvertRaw(0, 0, 4095, &measurements);
+    near(measurements.il, 8.2, 0.01);
+    ADC_ConvertRaw(0, 0, 3204, &measurements);
+    near(measurements.il, 1.0, 0.01);
+    ADC_ConvertRaw(0, 0, 2957, &measurements);
+    near(measurements.il, -1.0, 0.01);
+
+    ADC_ConvertRaw(4095, 4095, 3081, &measurements);
+    near(measurements.v_high, 3.31 / 0.0461, 0.001);
+    near(measurements.v_low, 3.31 / 0.047, 0.001);
+    return 0;
+}

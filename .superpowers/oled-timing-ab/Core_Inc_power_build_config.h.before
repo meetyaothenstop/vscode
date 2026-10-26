@@ -1,0 +1,26 @@
+#ifndef POWER_BUILD_CONFIG_H
+#define POWER_BUILD_CONFIG_H
+
+/* Explicit opt-in for the separate 12 V ADC-only bench image.
+ * This does not assert hardware OCP readiness or validate board wiring. */
+#ifndef POWER_BENCH_12V_BUCK_TEST
+#define POWER_BENCH_12V_BUCK_TEST 0U
+#endif
+
+#if POWER_BENCH_12V_BUCK_TEST
+#define POWER_CURRENT_REFERENCE_LIMIT       0.5f
+#define POWER_CURRENT_TRIP_AMPS             1.5f
+#define POWER_INPUT_MIN_VOLTS              10.5f
+#define POWER_INPUT_MAX_VOLTS              13.5f
+#define POWER_MAX_TARGET_VOLTS              6.0f
+#define POWER_FORWARD_DEFAULT_OUTPUT_VOLTS  6U
+#else
+#define POWER_CURRENT_REFERENCE_LIMIT       6.0f
+#define POWER_CURRENT_TRIP_AMPS             7.5f
+#define POWER_INPUT_MIN_VOLTS               6.0f
+#define POWER_INPUT_MAX_VOLTS              40.0f
+#define POWER_MAX_TARGET_VOLTS             36.0f
+#define POWER_FORWARD_DEFAULT_OUTPUT_VOLTS 36U
+#endif
+
+#endif

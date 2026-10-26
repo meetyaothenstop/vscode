@@ -1,0 +1,363 @@
+#include "power_control.h"
+#include "forward.h"
+#include "reverse.h"
+#include <math.h>
+
+#define ALL_OUTPUTS (HRTIM_OUTPUT_TA1 | HRTIM_OUTPUT_TA2 | HRTIM_OUTPUT_TB1 | HRTIM_OUTPUT_TB2)
+#define LOW_OUTPUTS (HRTIM_OUTPUT_TA2 | HRTIM_OUTPUT_TB2)
+#define TIMER_A HRTIM_TIMERINDEX_TIMER_A
+#define TIMER_B HRTIM_TIMERINDEX_TIMER_B
+#define CURRENT_REFERENCE_LIMIT 6.0f /* leave margin below the +8 A ADC rail */
+#define CURRENT_TRIP_AMPS 7.5f
+#define INPUT_MIN_VOLTS 6.0f
+#define INPUT_MAX_VOLTS 40.0f
+
+volatile uint32_t power_command;
+volatile float power_target_volts = 36.0f;
+volatile PowerStatus power_status;
+static volatile unsigned start_pending;
+static unsigned active_mode, bootstrap_cycles, arming_cycles;
+static unsigned bootstrap_resume, transition_ready;
+static unsigned reverse_polarity_cycles;
+static float active_target;
+static uint32_t cycle_budget;
+static uint32_t previous_entry;
+static unsigned have_previous_entry;
+static volatile unsigned sample_valid;
+static PwmPlan resume_plan;
+
+int Power_IsStartPending(void)
+{
+    return start_pending != 0U;
+}
+
+int Power_SamplesAreValid(void)
+{
+    return sample_valid != 0U;
+}
+
+void Power_EmergencyOff(void)
+{
+    if ((RCC->APB2ENR & RCC_APB2ENR_HRTIM1EN) != 0U)
+        HRTIM1->sCommonRegs.ODISR = ALL_OUTPUTS;
+}
+
+static void trip(uint32_t fault)
+{
+    Power_EmergencyOff();
+    power_status.fault |= fault;
+    power_status.state = POWER_FAULT;
+    start_pending = 0U;
+}
+
+void Power_Stop(void)
+{
+    uint32_t saved = __get_PRIMASK();
+    __disable_irq();
+    Power_EmergencyOff();
+    start_pending = 0U;
+    if (power_status.state != POWER_FAULT) power_status.state = POWER_STOPPED;
+    __set_PRIMASK(saved);
+}
+
+void Power_ClearFault(void)
+{
+    uint32_t saved = __get_PRIMASK();
+    __disable_irq();
+    Power_EmergencyOff();
+    start_pending = 0U;
+    power_status.fault = 0U;
+    power_status.state = POWER_STOPPED;
+    __set_PRIMASK(saved);
+}
+
+static void write_plan(const PwmPlan *plan)
+{
+    /* Block both preload transfers during the paired write. No software
+     * update in the running loop: both compare values latch at next period. */
+    HRTIM1->sCommonRegs.CR1 |= HRTIM_CR1_TAUDIS | HRTIM_CR1_TBUDIS;
+    HRTIM1->sTimerxRegs[TIMER_A].CMP1xR = plan->right_compare;
+    HRTIM1->sTimerxRegs[TIMER_B].CMP1xR = plan->left_compare;
+    HRTIM1->sCommonRegs.CR1 &= ~(HRTIM_CR1_TAUDIS | HRTIM_CR1_TBUDIS);
+    power_status.left_compare = plan->left_compare;
+    power_status.right_compare = plan->right_compare;
+}
+
+static void begin_bootstrap(unsigned resume)
+{
+    /* Both callers already have all outputs disabled (stopped or HOLD). */
+    bootstrap_resume = resume;
+    bootstrap_cycles = 30U; /* 200 us with high outputs disabled */
+    HRTIM1->sTimerxRegs[TIMER_A].CMP1xR = PWM_MIN_COMPARE_TICKS;
+    HRTIM1->sTimerxRegs[TIMER_B].CMP1xR = PWM_MIN_COMPARE_TICKS;
+    power_status.state = POWER_BOOTSTRAP;
+    HRTIM1->sCommonRegs.OENR = LOW_OUTPUTS;
+}
+
+HAL_StatusTypeDef Power_Init(ADC_HandleTypeDef *adc, HRTIM_HandleTypeDef *hrtim)
+{
+    ADC_InjectionConfTypeDef config = {0};
+    HRTIM_ADCTriggerCfgTypeDef trigger = {0};
+    HRTIM_CompareCfgTypeDef compare = {0};
+    Power_EmergencyOff();
+    if (adc->Instance != ADC1 || hrtim->Instance != HRTIM1 ||
+        HAL_RCC_GetHCLKFreq() != 150000000U) return HAL_ERROR;
+
+    /* Injected order differs from the legacy regular scan: IL first,
+     * then VH, VL. 3 x (24.5 + 12.5) / 37.5 MHz = 2.96 us.
+     * Trigger at 25% period; data is read at the next period interrupt. */
+    config.InjectedNbrOfConversion = 3U;
+    config.InjectedSamplingTime = ADC_SAMPLETIME_24CYCLES_5;
+    config.InjectedSingleDiff = ADC_SINGLE_ENDED;
+    config.InjectedOffsetNumber = ADC_OFFSET_NONE;
+    config.ExternalTrigInjecConv = ADC_EXTERNALTRIGINJEC_HRTIM_TRG1;
+    config.ExternalTrigInjecConvEdge = ADC_EXTERNALTRIGINJECCONV_EDGE_RISING;
+    config.QueueInjectedContext = DISABLE;
+    config.AutoInjectedConv = DISABLE;
+    config.InjectedChannel = ADC_CHANNEL_3;
+    config.InjectedRank = ADC_INJECTED_RANK_1;
+    if (HAL_ADCEx_InjectedConfigChannel(adc, &config) != HAL_OK) return HAL_ERROR;
+    config.InjectedChannel = ADC_CHANNEL_1;
+    config.InjectedRank = ADC_INJECTED_RANK_2;
+    if (HAL_ADCEx_InjectedConfigChannel(adc, &config) != HAL_OK) return HAL_ERROR;
+    config.InjectedChannel = ADC_CHANNEL_2;
+    config.InjectedRank = ADC_INJECTED_RANK_3;
+    if (HAL_ADCEx_InjectedConfigChannel(adc, &config) != HAL_OK) return HAL_ERROR;
+
+    compare.CompareValue = PWM_PERIOD_TICKS / 4U;
+    if (HAL_HRTIM_WaveformCompareConfig(hrtim, TIMER_A, HRTIM_COMPAREUNIT_3,
+                                       &compare) != HAL_OK) return HAL_ERROR;
+    trigger.UpdateSource = HRTIM_ADCTRIGGERUPDATE_TIMER_A;
+    trigger.Trigger = HRTIM_ADCTRIGGEREVENT13_TIMERA_CMP3;
+    if (HAL_HRTIM_ADCTriggerConfig(hrtim, HRTIM_ADCTRIGGER_1, &trigger) != HAL_OK)
+        return HAL_ERROR;
+    /* Flush initial preloads before starting both counters in one MCR write. */
+    HRTIM1->sCommonRegs.CR2 = HRTIM_CR2_TASWU | HRTIM_CR2_TBSWU |
+                             HRTIM_CR2_TARST | HRTIM_CR2_TBRST;
+    ADC1->ISR = ADC_ISR_JEOS | ADC_ISR_JEOC | ADC_ISR_JQOVF;
+    if (HAL_ADCEx_InjectedStart(adc) != HAL_OK) return HAL_ERROR;
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+    cycle_budget = HAL_RCC_GetHCLKFreq() / PWM_FREQUENCY_HZ;
+    power_status.state = POWER_STOPPED;
+    HRTIM1->sTimerxRegs[TIMER_B].TIMxICR = HRTIM_TIMICR_REPC;
+    HRTIM1->sTimerxRegs[TIMER_B].TIMxDIER |= HRTIM_TIMDIER_REPIE;
+    HAL_NVIC_SetPriority(HRTIM1_TIMB_IRQn, 0U, 0U);
+    HAL_NVIC_ClearPendingIRQ(HRTIM1_TIMB_IRQn);
+    HAL_NVIC_EnableIRQ(HRTIM1_TIMB_IRQn);
+    return HAL_HRTIM_WaveformCounterStart(hrtim, HRTIM_TIMERID_TIMER_A |
+                                        HRTIM_TIMERID_TIMER_B);
+}
+
+int Power_RequestStart(unsigned mode, float target_volts)
+{
+    int reverse = mode == 3U || mode == 4U;
+    int boost = mode == 2U || mode == 4U;
+    float vin = reverse ? power_status.v_right : power_status.v_left;
+    float vout = reverse ? power_status.v_left : power_status.v_right;
+    if (power_status.state != POWER_STOPPED || start_pending != 0U) return 0;
+    if ((mode < 1U || mode > 4U) || power_status.samples < 2U ||
+        !sample_valid ||
+        !(target_volts >= 1.0f && target_volts <= 36.0f) ||
+        !(vin >= INPUT_MIN_VOLTS && vin <= INPUT_MAX_VOLTS) ||
+        !(fabsf(power_status.il) < 0.25f) ||
+        /* Original precharge starts with a tiny left duty. A charged output
+         * would drive reverse current before the voltage filter catches up. */
+        vout > 0.25f || (boost && vin >= target_volts) ||
+        (!boost && vin <= target_volts)) {
+        trip(POWER_FAULT_START);
+        return 0;
+    }
+    active_mode = mode;
+    active_target = target_volts;
+    if (reverse) {
+        reverse_configure(boost ? vin : 0.1f, target_volts, CURRENT_REFERENCE_LIMIT);
+        reverse_initialize(0.0f);
+        reverse_U.mode = (float)mode;
+    } else {
+        forward_configure(boost ? vin : 0.1f, target_volts, CURRENT_REFERENCE_LIMIT);
+        forward_initialize(0.0f);
+        forward_U.mode = (float)mode;
+    }
+    bootstrap_resume = transition_ready = 0U;
+    reverse_polarity_cycles = 0U;
+    power_status.isr_cycles_max = 0U;
+    __DMB();
+    start_pending = 1U;
+    return 1;
+}
+
+void Power_Service(AdcMeasurements *measurements)
+{
+    uint16_t vh, vl, il;
+    uint32_t saved = __get_PRIMASK();
+    __disable_irq();
+    vh = power_status.raw_vh;
+    vl = power_status.raw_vl;
+    il = power_status.raw_il;
+    __set_PRIMASK(saved);
+    ADC_ConvertRaw(vh, vl, il, measurements);
+    uint32_t command = power_command;
+    power_command = POWER_CMD_NONE;
+    if (command == POWER_CMD_STOP) Power_Stop();
+    else if (command == POWER_CMD_CLEAR_FAULT) Power_ClearFault();
+    else if (command == POWER_CMD_START_BOOST)
+        (void)Power_RequestStart(2U, power_target_volts);
+    else if (command == POWER_CMD_START_BUCK)
+        (void)Power_RequestStart(1U, power_target_volts);
+    else if (command == POWER_CMD_START_REVERSE_BUCK)
+        (void)Power_RequestStart(3U, power_target_volts);
+    else if (command == POWER_CMD_START_REVERSE_BOOST)
+        (void)Power_RequestStart(4U, power_target_volts);
+}
+
+void Power_TimerIRQ(void)
+{
+    const uint32_t begin = DWT->CYCCNT;
+    uint32_t flags = ADC1->ISR;
+    if (!(HRTIM1->sTimerxRegs[TIMER_B].TIMxISR & HRTIM_TIMISR_REP)) return;
+    HRTIM1->sTimerxRegs[TIMER_B].TIMxICR = HRTIM_TIMICR_REPC;
+    /* REP and JEOS are sticky: they cannot count missed periods. Compare
+     * successive entry timestamps as well as checking execution duration. */
+    uint32_t spacing = begin - previous_entry;
+    previous_entry = begin;
+    if (have_previous_entry && power_status.state != POWER_STOPPED &&
+        power_status.state != POWER_FAULT &&
+        !PWM_EntryIsTimely(spacing, HRTIM1->sTimerxRegs[TIMER_B].CNTxR)) {
+        trip(POWER_FAULT_TIMING);
+        return;
+    }
+    have_previous_entry = 1U;
+    if (!(flags & ADC_ISR_JEOS) || (flags & ADC_ISR_JQOVF)) {
+        sample_valid = 0U;
+        if (start_pending || (power_status.state != POWER_STOPPED &&
+                              power_status.state != POWER_FAULT))
+            trip(POWER_FAULT_ADC);
+        ADC1->ISR = ADC_ISR_JQOVF | ADC_ISR_JEOS | ADC_ISR_JEOC;
+        return;
+    }
+    power_status.raw_il = (uint16_t)ADC1->JDR1;
+    power_status.raw_vh = (uint16_t)ADC1->JDR2;
+    power_status.raw_vl = (uint16_t)ADC1->JDR3;
+    ADC1->ISR = ADC_ISR_JEOS | ADC_ISR_JEOC;
+    power_status.il = (float)power_status.raw_il * (3.3f / 4095.0f / 0.1f) - 25.0f;
+    power_status.v_left = (float)power_status.raw_vh * (3.3f / 4095.0f / 0.047f);
+    power_status.v_right = (float)power_status.raw_vl * (3.3f / 4095.0f / 0.047f);
+    ++power_status.samples;
+    sample_valid = 1U;
+    if (power_status.state == POWER_FAULT) return;
+    unsigned starting = start_pending;
+    if (starting) {
+        start_pending = 0U;
+        begin_bootstrap(0U);
+    }
+    if (power_status.state == POWER_STOPPED) return;
+    int reverse = active_mode >= 3U;
+    float vin = reverse ? power_status.v_right : power_status.v_left;
+    float vout = reverse ? power_status.v_left : power_status.v_right;
+    if (!(vin >= INPUT_MIN_VOLTS && vin <= INPUT_MAX_VOLTS))
+        trip(POWER_FAULT_INPUT);
+    if (vout > active_target * 1.1f)
+        trip(POWER_FAULT_OUTPUT);
+    if (fabsf(power_status.il) >= CURRENT_TRIP_AMPS || power_status.raw_il >= 4090U ||
+        power_status.raw_il <= 5U) trip(POWER_FAULT_CURRENT);
+    /* Synchronous reverse Boost can briefly return ripple current to its
+     * source when resuming from zero current. Qualify direction over 16
+     * samples (107 us); absolute overcurrent above remains immediate. */
+    if (reverse) {
+        reverse_polarity_cycles = power_status.il > 1.0f ? reverse_polarity_cycles + 1U : 0U;
+        if (reverse_polarity_cycles >= 16U) trip(POWER_FAULT_REVERSE);
+    } else if (power_status.il < -1.0f) trip(POWER_FAULT_REVERSE);
+    if (power_status.state == POWER_FAULT) return;
+
+    if (power_status.state == POWER_BOOTSTRAP) {
+        /* The IRQ which enables the low sides starts interval one; do not
+         * count an interval before it has elapsed. HOLD resume is started
+         * at IRQ end and follows the same 30 complete period requirement. */
+        if (starting) return;
+        if (--bootstrap_cycles == 0U) {
+            PwmPlan initial;
+            if (bootstrap_resume) initial = resume_plan;
+            else if (reverse) (void)PWM_MakeReversePlan(0.0f, 0, &initial);
+            else (void)PWM_MakePlan(0.0f, 0, &initial);
+            write_plan(&initial);
+            arming_cycles = 2U;
+            power_status.state = POWER_ARMING;
+        }
+        return;
+    }
+    if (power_status.state == POWER_ARMING) {
+        if (--arming_cycles != 0U) return;
+        HRTIM1->sCommonRegs.OENR = ALL_OUTPUTS;
+        power_status.state = POWER_RUNNING;
+    }
+    if (power_status.state == POWER_CHANGEOVER && transition_ready) {
+        /* A valid boost plan was written on the previous IRQ and has now
+         * crossed the common preload boundary before enabling all gates. */
+        HRTIM1->sCommonRegs.OENR = ALL_OUTPUTS;
+        power_status.state = POWER_RUNNING;
+    }
+    if (reverse && power_status.state == POWER_RUNNING && reverse_Y.CTRL_RUN_R &&
+        vout >= active_target * 1.005f) {
+        Power_EmergencyOff();
+        power_status.state = POWER_HOLD;
+    }
+    PwmPlan plan;
+    int resuming = power_status.state == POWER_HOLD &&
+                   vout < active_target * 0.99f && fabsf(power_status.il) < 0.25f;
+    if (reverse) {
+        reverse_U.IL = power_status.il;
+        reverse_U.V_left = power_status.v_left;
+        reverse_U.V_right = power_status.v_right;
+        reverse_U.mode = (float)active_mode;
+        if (resuming) reverse_prepare_resume(vout);
+        if (power_status.state == POWER_HOLD && !resuming) reverse_hold_step();
+        else reverse_step();
+        if (reverse_errorStatus || !PWM_MakeReversePlan(reverse_Y.D_cm_R,
+                                                        reverse_Y.BOOST_RUN_R, &plan)) {
+            trip(POWER_FAULT_CONTROLLER);
+            return;
+        }
+        if (active_mode == 4U && reverse_Y.D_cm_R4 && !reverse_Y.BOOST_RUN_R) {
+            Power_EmergencyOff();
+            power_status.state = POWER_CHANGEOVER;
+            transition_ready = 0U;
+        }
+        if (power_status.state == POWER_CHANGEOVER && reverse_Y.BOOST_RUN_R)
+            transition_ready = 1U;
+        power_status.d_cmd = reverse_Y.D_cm_R;
+        power_status.v_reference = reverse_B.Saturation4;
+    } else {
+        forward_U.IL = power_status.il;
+        forward_U.V_left = power_status.v_left;
+        forward_U.V_right = power_status.v_right;
+        forward_U.mode = (float)active_mode;
+        forward_step();
+        if (forward_errorStatus || !PWM_MakePlan(forward_Y.D_cmd,
+                                                forward_Y.BOOST_RUN, &plan)) {
+            trip(POWER_FAULT_CONTROLLER);
+            return;
+        }
+        power_status.d_cmd = forward_Y.D_cmd;
+        power_status.v_reference = forward_B.Saturation4;
+    }
+    /* Do not write either preload close to the common update boundary. */
+    if (DWT->CYCCNT - begin > cycle_budget - 160U ||
+        HRTIM1->sTimerxRegs[TIMER_B].CNTxR > PWM_PERIOD_TICKS - 5120U) {
+        trip(POWER_FAULT_TIMING);
+        return;
+    }
+    if (power_status.state == POWER_HOLD) {
+        /* Keep reference/filters alive without winding up PIs while off.
+         * Refresh bootstrap before resuming the retained operating mode. */
+        if (resuming) {
+            resume_plan = plan;
+            begin_bootstrap(1U);
+        }
+    } else write_plan(&plan);
+    uint32_t elapsed = DWT->CYCCNT - begin;
+    if (elapsed > power_status.isr_cycles_max) power_status.isr_cycles_max = elapsed;
+    if (elapsed > cycle_budget - 64U ||
+        (HRTIM1->sTimerxRegs[TIMER_B].TIMxISR & HRTIM_TIMISR_REP))
+        trip(POWER_FAULT_TIMING);
+}

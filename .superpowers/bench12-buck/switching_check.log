@@ -1,0 +1,3 @@
+Bench ideal switching 12->6 V, 100 ohm, 0.5 A reference: Vout=5.999 V, peak IL=2.571 A, sampled peak=2.526 A
+Minimum sampled IL: -1.444 A at cycle 99, voltage 0.656 V
+Assertion failed: sampled_min > -1.0, file .superpowers/bench12-buck/switching_check.c, line 58

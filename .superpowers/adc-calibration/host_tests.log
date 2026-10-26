@@ -1,0 +1,59 @@
+adc_measure_test: PASS
+adc_acquire_test: PASS
+Averaged 12->36 V, 36 ohm: Vout=35.998 V, peak IL=7.080 A
+PWM mapping and forward startup tests passed
+pwm_control_test: PASS
+Ideal switching 12->36 V, 36 ohm: Vout=35.953 V, peak IL=7.052 A, sampled peak=7.042 A
+pwm_switching_test: PASS
+Reverse average 12->36 V, R=36: Vout=35.998, |IL|peak=3.593, opposite=0.000 @0 boost=0
+Reverse average 24->12 V, R=12: Vout=11.999, |IL|peak=1.191, opposite=0.000 @0 boost=0
+Reverse average 36->12 V, R=12: Vout=11.999, |IL|peak=1.191, opposite=0.032 @2024 boost=0
+Reverse average 6->12 V, R=12: Vout=11.998, |IL|peak=2.409, opposite=0.000 @0 boost=0
+Reverse average 24->36 V, R=36: Vout=35.999, |IL|peak=1.814, opposite=0.000 @0 boost=0
+Reverse average 35->36 V, R=36: Vout=35.999, |IL|peak=2.413, opposite=0.000 @0 boost=0
+Reverse average 6->36 V, R=72: Vout=35.998, |IL|peak=3.850, opposite=0.000 @0 boost=0
+Reverse average 40->1 V, R=2: Vout=1.002, |IL|peak=0.936, opposite=0.000 @0 boost=0
+Reverse controller references, mirrored PWM, Buck/Boost models: PASS
+reverse_control_test: PASS
+Reverse ideal switching 12->36 V R=36: Vout=35.970, peak=4.656, sampled=2.749, opposite=0.000 A (0 periods)
+Reverse ideal switching 36->12 V R=12: Vout=11.989, peak=2.250, sampled=2.123, opposite=0.248 A (0 periods)
+Reverse ideal switching 24->12 V R=12: Vout=11.997, peak=1.996, sampled=1.752, opposite=0.121 A (0 periods)
+Reverse ideal switching 6->12 V R=12: Vout=11.982, peak=2.810, sampled=2.216, opposite=0.000 A (0 periods)
+Reverse ideal switching 24->36 V R=36: Vout=35.993, peak=2.888, sampled=1.796, opposite=0.000 A (0 periods)
+Reverse ideal switching 35->36 V R=36: Vout=35.995, peak=2.416, sampled=2.413, opposite=0.000 A (0 periods)
+Reverse ideal switching 6->36 V R=72: Vout=35.954, peak=4.530, sampled=3.595, opposite=0.000 A (0 periods)
+Reverse ideal switching 40->1 V R=2: Vout=0.991, peak=1.140, sampled=1.078, opposite=0.090 A (0 periods)
+Reverse ideal switching 12->36 V R=1000000: Vout=36.160, peak=1.924, sampled=1.056, opposite=0.206 A (0 periods)
+Reverse ideal switching 36->12 V R=1000000: Vout=11.997, peak=1.148, sampled=0.976, opposite=0.394 A (0 periods)
+Reverse ideal switching 12->36 V R=1000: Vout=36.089, peak=1.948, sampled=1.049, opposite=1.917 A (5 periods)
+reverse_switching_test: PASS
+Cold boot, sample qualification and idle outputs: PASS
+Calibrated left bus, independent right gain and shared telemetry: PASS
+Forward Buck/Boost startup and polarity regressions: PASS
+Reverse Buck/Boost mirrored startup and physical current trips: PASS
+Reverse left output OV and right source range: PASS
+Start qualification: bus direction, residual voltage, current, targets and modes: PASS
+Reverse Boost all-off changeover waits for actual preload latch: PASS
+ADC loss/overflow cancel starts; missed/late IRQ trips: PASS
+Reverse output hold, residual current guard, Boost resume and Stop: PASS
+Debugger commands 1-6, stop/fault clear and no automatic restart: PASS
+Hardware protection readiness, pulse capture, active clear refusal and no restart: PASS
+Short faults around cold/bootstrap/arming/changeover/HOLD enables remain latched: PASS
+Real power backend host integration: PASS
+power_control_test: PASS
+Invalid handle and absent HRTIM clock never configure protection: PASS
+Confirmed GPIO, threshold DACs, comparators and both HRTIM fault routes: PASS
+Raw comparator levels use correct polarity; transient events stay latched: PASS
+IRQ masking preserves shutdown; acknowledgement waits for both safe levels: PASS
+A fault arriving during acknowledgement remains unarmed: PASS
+Every HAL failure and unsafe output polarity leaves protection unready: PASS
+power_protection_test: PASS
+Invalid handle and absent HRTIM clock never configure protection: PASS
+Unconfirmed wiring leaves analog peripherals unconfigured and PWM disabled: PASS
+power_protection_unconfirmed_test: PASS
+Menu navigation, edits, automatic modes, action gates and telemetry: PASS
+power_menu_test: PASS
+UI hardware actions, key priority, pending lock and page scheduling: PASS
+power_ui_test: PASS
+OLED RAM drawing, clipping, page commands and font previews: PASS
+oled_render_test: PASS

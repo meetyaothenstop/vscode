@@ -1,0 +1,1 @@
+Assertion failed: pending.left_compare == 0U && pending.left_high == 0.0f, file tests/bench12_switching_test.c, line 22

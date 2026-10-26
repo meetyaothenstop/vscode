@@ -1,0 +1,1 @@
+Assertion failed: strstr(drawn.rows[7], "FAULT:2 IN 9.75 V"), file tests/power_ui_test.c, line 154

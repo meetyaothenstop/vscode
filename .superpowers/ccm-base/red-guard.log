@@ -1,0 +1,4 @@
+In file included from Core/Src/power_menu.c:2:
+Core/Inc/power_build_config.h:34:2: error: #error CCM timing comparison requires unified restricted diagnostics.
+   34 | #error CCM timing comparison requires unified restricted diagnostics.
+      |  ^~~~~

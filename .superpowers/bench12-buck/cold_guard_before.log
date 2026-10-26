@@ -1,0 +1,1 @@
+tests/power_control_test.c:238: power_status.state == POWER_FAULT (state=1, fault=0x0, outputs=0xa)

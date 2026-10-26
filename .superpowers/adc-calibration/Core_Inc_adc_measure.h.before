@@ -1,0 +1,20 @@
+#ifndef ADC_MEASURE_H
+#define ADC_MEASURE_H
+
+#include <stdint.h>
+
+typedef struct
+{
+    uint16_t raw_vh;
+    uint16_t raw_vl;
+    uint16_t raw_il;
+    double v_high;
+    double v_low;
+    double il;
+} AdcMeasurements;
+
+/* Convert ADC1 ranks PA0/ADC_VH, PA1/ADC_VL, PA2/ADC_L. */
+void ADC_ConvertRaw(uint16_t raw_vh, uint16_t raw_vl,
+                    uint16_t raw_il, AdcMeasurements *out);
+
+#endif

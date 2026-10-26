@@ -1,0 +1,1 @@
+Assertion failed: strstr(drawn.rows[7], "FAULT:64 T3"), file tests/power_ui_test.c, line 145

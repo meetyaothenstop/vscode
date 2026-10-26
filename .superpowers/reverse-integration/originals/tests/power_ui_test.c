@@ -1,0 +1,127 @@
+#include "power_ui.h"
+#include "power_menu.h"
+#include "power_control.h"
+#include "key.h"
+#include "OLED_Function.h"
+#include <assert.h>
+#include <stdio.h>
+#include <string.h>
+
+volatile PowerStatus power_status;
+static uint32_t tick;
+static unsigned keys, scans, starts, stops, last_mode, page_calls, pending;
+static float last_target;
+static int valid = 1, accept = 1, fail_display;
+static MenuFrame drawn;
+static AdcMeasurements measured;
+
+uint32_t HAL_GetTick(void) { return tick; }
+void Key_Scan(void) { ++scans; }
+uint8_t Key_IsPressed(uint8_t id)
+{
+    unsigned mask = 1U << id;
+    uint8_t result = (keys & mask) != 0;
+    keys &= ~mask;
+    return result;
+}
+int Power_IsStartPending(void) { return (int)pending; }
+int Power_SamplesAreValid(void) { return valid; }
+int Power_RequestStart(unsigned mode, float target)
+{
+    ++starts; last_mode = mode; last_target = target;
+    if (accept) pending = 1;
+    return accept;
+}
+void Power_Stop(void) { ++stops; pending = 0; power_status.state = POWER_STOPPED; }
+void OLED_ClearRAM(void) { memset(&drawn, 0, sizeof(drawn)); }
+void OLED_DrawStr(int16_t x, int16_t y, const char *text)
+{
+    assert(x == 0 && y >= 0 && y <= 56 && y % 8 == 0);
+    assert(strlen(text) == MENU_COLUMNS);
+    memcpy(drawn.rows[y / 8], text, MENU_COLUMNS + 1);
+}
+HAL_StatusTypeDef OLED_RefreshPage(uint8_t page)
+{
+    assert(page < 8); ++page_calls;
+    return fail_display ? HAL_ERROR : HAL_OK;
+}
+static void service(unsigned mask)
+{
+    unsigned before = page_calls;
+    keys = mask;
+    PowerUI_Service(&measured);
+    assert(keys == 0); /* Every event is consumed, including lower priority keys. */
+    assert(page_calls - before <= 1); /* The foreground is never held for a frame. */
+    tick += 25;
+}
+static void key(unsigned id) { service(1U << id); }
+static void settle(void) { for (unsigned i = 0; i < 20; ++i) service(0); }
+static void test_external_start_cancels_edit_and_transitions_clear_old_notices(void)
+{
+    power_status.state = POWER_STOPPED;
+    power_status.fault = 0;
+    pending = 0; valid = 1; fail_display = 0;
+    PowerUI_Init();
+    key(3); key(3); key(1); settle();
+    assert(strstr(drawn.rows[7], "EDIT K3:OK"));
+    pending = 1; /* Existing debugger start API can act while UI is editing. */
+    settle();
+    assert(strstr(drawn.rows[7], "STARTING"));
+    assert(strstr(drawn.rows[2], "12 V")); /* Unconfirmed 13 V was discarded. */
+    pending = 0; power_status.state = POWER_RUNNING;
+    settle();
+    assert(strstr(drawn.rows[7], "RUNNING"));
+    key(3); settle();
+    assert(strstr(drawn.rows[7], "STOP BEFORE EDIT"));
+    power_status.state = POWER_STOPPED;
+    settle();
+    assert(strstr(drawn.rows[7], "STOPPED"));
+}
+int main(void)
+{
+    measured.v_high = 12.25; measured.v_low = 0.0; measured.il = -0.1;
+    PowerUI_Init();
+    service(0);
+    assert(strstr(drawn.rows[2], ">forward"));
+    assert(starts == 0 && stops == 0);
+    key(3); settle();
+    assert(strstr(drawn.rows[0], "FORWARD BOOST"));
+    key(1); key(3); /* Up wraps to start, confirm submits Boost once. */
+    assert(starts == 1 && last_mode == 2 && last_target == 36.0f);
+    settle();
+    assert(strstr(drawn.rows[5], "stop") && strstr(drawn.rows[7], "STARTING"));
+    key(2); key(3); settle(); /* Pending startup locks voltage editing. */
+    assert(strstr(drawn.rows[7], "STOP BEFORE EDIT"));
+    key(4);
+    assert(stops == 1 && pending == 0);
+    key(3); key(3); /* Edit input from 12 to 40. */
+    for (unsigned i = 0; i < 28; ++i) key(1);
+    key(3); key(1); key(3);
+    assert(starts == 2 && last_mode == 1 && last_target == 36.0f);
+    key(4);
+    assert(stops == 2);
+    key(2); key(3); key(1); key(3); settle();
+    assert(starts == 2 && strstr(drawn.rows[7], "NOT IMPLEMENTED"));
+    /* Simultaneous OK and BACK: return wins and cannot queue a start. */
+    service((1U << 3) | (1U << 4)); settle();
+    assert(starts == 2 && strstr(drawn.rows[0], "BIDIRECTIONAL"));
+    key(1); key(3); key(1);
+    accept = 0;
+    key(3); settle();
+    assert(starts == 3 && strstr(drawn.rows[7], "START REJECTED"));
+    power_status.state = POWER_FAULT;
+    power_status.fault = 8;
+    key(3); settle();
+    assert(starts == 3 && strstr(drawn.rows[7], "FAULT:8"));
+    valid = 0;
+    settle();
+    assert(strstr(drawn.rows[2] + 11, "--"));
+    /* Missing OLED must still scan keys and allow navigation/stop. */
+    fail_display = 1;
+    unsigned old_scans = scans;
+    key(4); settle();
+    assert(scans == old_scans + 21);
+    test_external_start_cancels_edit_and_transitions_clear_old_notices();
+    puts("UI hardware actions, key priority, pending lock and page scheduling: PASS");
+    return 0;
+}

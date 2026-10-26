@@ -1,0 +1,24 @@
+#include "adc_measure.h"
+
+/* Rupper = 100 kOhm, Rlower = Rfeedback = 4.7 kOhm. */
+#define ADC_VOLTAGE_GAIN  (4.7 / 100.0)
+#define ADC_VREF_VOLTS    3.3
+#define ADC_FULL_SCALE    4095.0
+
+/* INA240A1: REF1 = 0 V, REF2 = 5 V, 20 V/V and 5 mOhm shunt. */
+#define CURRENT_ZERO_VOLTS  2.5
+#define CURRENT_VOLTS_PER_A 0.1
+
+void ADC_ConvertRaw(uint16_t raw_vh, uint16_t raw_vl,
+                    uint16_t raw_il, AdcMeasurements *out)
+{
+    out->raw_vh = raw_vh;
+    out->raw_vl = raw_vl;
+    out->raw_il = raw_il;
+    out->v_high = ((double)raw_vh * ADC_VREF_VOLTS / ADC_FULL_SCALE) /
+                  ADC_VOLTAGE_GAIN;
+    out->v_low = ((double)raw_vl * ADC_VREF_VOLTS / ADC_FULL_SCALE) /
+                 ADC_VOLTAGE_GAIN;
+    out->il = ((double)raw_il * ADC_VREF_VOLTS / ADC_FULL_SCALE -
+               CURRENT_ZERO_VOLTS) / CURRENT_VOLTS_PER_A;
+}

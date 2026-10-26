@@ -1,0 +1,1 @@
+tests/power_control_test.c:258: fabsf(power_status.fault_v_left - 12.0f) < 0.02f (state=4, fault=0x80, outputs=0x0)

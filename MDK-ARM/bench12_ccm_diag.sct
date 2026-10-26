@@ -1,0 +1,22 @@
+; STM32G474CB: 128 KiB Flash, 96 KiB ordinary SRAM + 32 KiB aliased CCM.
+; Standard __main scatter startup copies ER_CCMRAM from its Flash load image.
+LR_IROM1 0x08000000 0x00020000 {
+  ER_IROM1 0x08000000 0x00020000 {
+    *.o (RESET, +First)
+    *(InRoot$$Sections)
+    .ANY (+RO)
+    .ANY (+XO)
+  }
+  ER_CCMRAM 0x10000000 0x00008000 {
+    stm32g4xx_it.o (.text.HRTIM1_TIMB_IRQHandler)
+    power_control.o (.text.Power_TimerIRQ)
+    power_control.o (.text.enable_outputs)
+    forward.o (.text.forward_step)
+    pwm_plan.o (+RO)
+    power_protection.o (.text.PowerProtection_FaultPending)
+  }
+  ; Exclude 0x20018000..0x2001FFFF: it aliases the executable CCM region.
+  RW_IRAM1 0x20000000 0x00018000 {
+    .ANY (+RW +ZI)
+  }
+}

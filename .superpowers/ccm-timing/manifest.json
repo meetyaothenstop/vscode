@@ -1,0 +1,14 @@
+{
+  "date": "2026-10-26",
+  "target": "bench12_ccm_diag",
+  "home": "12V CCM DIAG",
+  "hex_sha256": "EA545887610F9BD636BCC207AFF4FEAACB8A9BBBEF9B1A10304DF621EAB6F412",
+  "ccm_exec": "0x10000000",
+  "ccm_load": "0x08007B28",
+  "ccm_bytes": 3684,
+  "host_passed": 19,
+  "arm_errors": 0,
+  "arm_warnings": 0,
+  "board_downloaded": false,
+  "board_speedup_verified": false
+}

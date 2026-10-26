@@ -1,0 +1,21 @@
+# Execution ledger — plan: docs/superpowers/plans/2026-10-22-oled-power-menu.md
+
+- User approved execution and changed the flow to automatic Buck/Boost selection. Spec and plan updated to that instruction; no further approval handoff is needed.
+- Project is not a Git repository. Work in the authorized directory; originals saved under .superpowers/oled-menu/originals. Git/worktree/commit steps do not apply.
+- Baseline: tests/run_tests.ps1 passed all four existing test groups.
+- Pre-flight: Task 1 owns HAL-independent menu types; Task 2 consumes those types and returns real API results. Task 2 owns RAM-only drawing and one-page transfer; legacy full-frame interfaces retain behavior. Task 3 consumes both test programs.
+- Ruling: equal configured voltages reject start — no pass-through mode exists in the present controller.
+- Ruling: use coherent foreground adc_measurements and atomic scalar state queries — avoid new IRQ masking or ISR overhead for UI.
+- Task 1: complete. Menu behavior scaffold failed page navigation; implemented navigation, transactional edits, bounds, automatic modes, action gates and rendering; power_menu_test passes.
+- Task 2: complete. UI scaffold failed home rendering; implemented hardware adapter, init/main integration, pending/valid queries, RAM drawing and one-page transfer. power_ui_test and oled_render_test pass.
+- Ruling: the legacy font table has fewer than 95 printable glyphs; use the actual array size and fallback '?' for unsupported characters. Test failed then passed for '~'.
+- Ruling: SSD1306 page service requires 20h+02h. Datasheet section 10.1.3 confirms this; corrected parser test and a legacy-address mutation prove the 20h+10h variant fails.
+- Ruling: suppress only missing-braces and unused-variable diagnostics for the existing vendor font header in the OLED host test; other test warnings remain errors.
+- Fresh verification: all seven host test groups pass; Keil rebuild via installed external packs succeeds with 0 errors and 0 warnings.
+- Visual verification: generated actual-font 128×64 previews in docs/previews and inspected the combined image. All right labels and rows fit.
+- Ruling: move the 176-byte foreground frame to static storage to increase margin on the existing 1024-byte shared main/IRQ stack. Linker stack was 696 bytes before this change; rebuild will confirm the reduction.
+- Task 3: complete. All seven test groups pass; final Keil rebuild reports 0 errors/0 warnings, maximum foreground stack 528 bytes. Actual-font previews inspected.
+- Review found external debugger startup could leave a stale edit/notice on screen. Regression failed at missing STARTING before the fix; sync_control_state now cancels unconfirmed editing on active transitions and clears old notices before handling keys and after control actions. Full suite passed after the fix.
+- Independent review of the final fix: no remaining actionable findings; reviewer independently reran all seven test groups successfully.
+- Final artifacts: MDK-ARM/bidreaction/bidreaction.hex, MDK-ARM/menu_build.log, docs/previews/oled-menu.png. No hardware flash or physical power-stage operation performed.
+- Final rebuild after static-frame change: Keil 0 errors, 0 warnings; maximum foreground stack reduced from 696 to 528 bytes. HEX regenerated. Host suite 7/7 PASS.

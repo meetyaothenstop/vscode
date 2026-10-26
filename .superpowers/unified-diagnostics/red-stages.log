@@ -1,0 +1,1 @@
+tests/power_control_test.c:745: power_diag.fault.context == POWER_DIAG_CONTEXT_TIMER_IRQ (state=4, fault=0x80, outputs=0x0)

@@ -1,0 +1,1 @@
+tests/power_control_test.c:257: power_status.fault_detail == (n == 0U ? 9U : 8U) (state=4, fault=0x80, outputs=0x0)
