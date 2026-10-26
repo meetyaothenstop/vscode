@@ -1,14 +1,14 @@
 {
   "date": "2026-10-26",
   "target": "bench12_buck_fast",
-  "source_baseline": "ba95179",
-  "input_min_V": 10.5,
+  "source_baseline": "64dbdaa",
+  "input_min_V": 10.0,
   "input_max_V": 14.0,
   "host_groups_pass": 25,
   "arm_errors": 0,
   "arm_warnings": 0,
-  "hex_sha256": "AF7FEBF78B0D42D038EE348DD5B0141D117FA4889410BC5F1396E57FF6EA2634",
-  "config_sha256": "C819C513DC20E69FBCEEFEC608C230E912D8508B9669C23259F88198B54F9ACA",
+  "hex_sha256": "5AA0B153363AC5679A04B1A42955B85FCAB907E413472D2632CA3DD6E72F981C",
+  "config_sha256": "22DF523B0069DBDE586A3E6A4FE66DD31894687F8506DF64A6ACC1086CDB11A6",
   "ccm_copy_vector_verified": true,
   "board_result_after_change": "pending"
 }

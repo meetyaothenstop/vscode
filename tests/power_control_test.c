@@ -892,9 +892,9 @@ int main(void)
 #endif
     cold_start_samples_rechecked();
 #if defined(POWER_BENCH_FAST_BUCK) && POWER_BENCH_FAST_BUCK
-    /* Reported 13.53V sample must be allowed through request, preparation
+    /* Reported 10.31/13.53V samples must pass request, preparation
      * and running. Still shut off on the first sample above the new limit. */
-    const float accepted_inputs[] = {13.53f, 13.9f, 14.0f};
+    const float accepted_inputs[] = {10.05f, 10.31f, 13.53f, 13.9f, 14.0f};
     for (unsigned n = 0; n < sizeof(accepted_inputs)/sizeof(accepted_inputs[0]); ++n) {
         float vin = accepted_inputs[n];
         stopped_samples(vin, 0.0f, 0.0f);
@@ -907,6 +907,12 @@ int main(void)
         period(14.1f, 0.0f, 0.0f);
         expect_fault(POWER_FAULT_INPUT);
         CHECK(fabsf(power_status.fault_input_volts - 14.1f) < 0.02f);
+        stopped_samples(vin, 0.0f, 0.0f);
+        CHECK(request(1U, 6.0f));
+        arm_pending(1U, vin, 0.0f);
+        period(9.9f, 0.0f, 0.0f);
+        expect_fault(POWER_FAULT_INPUT);
+        CHECK(fabsf(power_status.fault_input_volts - 9.9f) < 0.02f);
     }
     stopped_samples(12.0f, 0.0f, 0.0f);
     power_status.v_left = 14.0f;
@@ -914,7 +920,13 @@ int main(void)
     stopped_samples(12.0f, 0.0f, 0.0f);
     power_status.v_left = 14.001f;
     CHECK(!request(1U, 6.0f) && power_status.fault_detail == 4U);
-    puts("FAST input margin: 13.53..14V accepted; above14V request/first-sample trip: PASS");
+    stopped_samples(12.0f, 0.0f, 0.0f);
+    power_status.v_left = 10.0f;
+    CHECK(request(1U, 6.0f));
+    stopped_samples(12.0f, 0.0f, 0.0f);
+    power_status.v_left = 9.999f;
+    CHECK(!request(1U, 6.0f) && power_status.fault_detail == 4U);
+    puts("FAST input window: 10..14V accepted; outside request/first-sample trip: PASS");
 #endif
     stopped_samples(12.0f, 0.0f, 0.0f);
     CHECK(request(1U, 6.0f));
@@ -952,7 +964,7 @@ int main(void)
         expect_fault(POWER_FAULT_START);
         CHECK(power_status.fault_detail == 3U);
     }
-    const float sources[] = {10.0f, 14.1f, 24.0f};
+    const float sources[] = {9.9f, 14.1f, 24.0f};
     for (unsigned n = 0U; n < sizeof(sources) / sizeof(sources[0]); ++n) {
         stopped_samples(sources[n], 0.0f, 0.0f);
         CHECK(!request(1U, 6.0f));
@@ -983,13 +995,13 @@ int main(void)
     expect_fault(POWER_FAULT_INPUT);
     CHECK(HRTIM1->sCommonRegs.OENR == 0U);
     start_running(1U, 12.0f, 6.0f);
-    period(10.0f, 0.0f, 0.0f);
+    period(9.9f, 0.0f, 0.0f);
     expect_fault(POWER_FAULT_INPUT);
-    CHECK(fabsf(power_status.fault_input_volts - 10.0f) < 0.02f);
-    CHECK(power_status.fault_raw_vh == raw_voltage(10.0f, 0.0461f));
+    CHECK(fabsf(power_status.fault_input_volts - 9.9f) < 0.02f);
+    CHECK(power_status.fault_raw_vh == raw_voltage(9.9f, 0.0461f));
     period(12.0f, 0.0f, 0.0f);
     CHECK(fabsf(power_status.v_left - 12.0f) < 0.02f);
-    CHECK(fabsf(power_status.fault_input_volts - 10.0f) < 0.02f);
+    CHECK(fabsf(power_status.fault_input_volts - 9.9f) < 0.02f);
     start_running(1U, 12.0f, 6.0f);
     period(12.0f, 6.7f, 0.0f);
     expect_fault(POWER_FAULT_OUTPUT);

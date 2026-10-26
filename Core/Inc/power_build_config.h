@@ -56,12 +56,13 @@
 #if POWER_BENCH_12V_BUCK_TEST
 #define POWER_CURRENT_REFERENCE_LIMIT       0.5f
 #define POWER_CURRENT_TRIP_AMPS             1.5f
-#define POWER_INPUT_MIN_VOLTS              10.5f
 #if POWER_BENCH_FAST_BUCK
-/* User-requested margin after IN13.53V while measured input stayed11.9..12V.
+/* User-requested margin after IN13.53/10.31V with measured input11.9..12V.
  * This is an acceptance limit, not a calibration or noise filter. */
+#define POWER_INPUT_MIN_VOLTS              10.0f
 #define POWER_INPUT_MAX_VOLTS              14.0f
 #else
+#define POWER_INPUT_MIN_VOLTS              10.5f
 #define POWER_INPUT_MAX_VOLTS              13.5f
 #endif
 #define POWER_MAX_TARGET_VOLTS              6.0f
