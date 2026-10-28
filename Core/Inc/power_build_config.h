@@ -58,9 +58,13 @@
 #if POWER_BENCH_FAST_BUCK
 #define POWER_START_CURRENT_LIMIT_AMPS 0.5f
 #define POWER_START_OUTPUT_MAX_VOLTS   1.0f
+/* User-requested OVP experiment: 6 V target trips above 7 V.
+ * Keep proportional protection when selecting a lower target. */
+#define POWER_OUTPUT_OVERVOLTAGE_RATIO (7.0f / 6.0f)
 #else
 #define POWER_START_CURRENT_LIMIT_AMPS 0.25f
 #define POWER_START_OUTPUT_MAX_VOLTS   0.25f
+#define POWER_OUTPUT_OVERVOLTAGE_RATIO 1.1f
 #endif
 
 #if POWER_BENCH_12V_BUCK_TEST

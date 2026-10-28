@@ -72,8 +72,8 @@ int main(void)
     assert(fabs(voltage - 6.0) < 0.5);
     printf("Nominal 460 uF startup peak: %.6f V at %.6f s\n",
            voltage_peak, voltage_peak_cycle / 150000.0);
-    /* A correct final voltage must not hide startup overshoot that would
-     * trip the real backend's 6V x1.1 output protection. */
+    /* Retain the nominal startup overshoot regression guard at 6.6 V,
+     * independently of the FAST bench's experimental 7 V protection. */
     assert(voltage_peak <= 6.6);
     printf("Minimum sampled IL: %.3f A at cycle %u, voltage %.3f V\n",
            sampled_min, minimum_cycle, minimum_voltage);

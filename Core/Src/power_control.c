@@ -549,7 +549,7 @@ void Power_TimerIRQ(void)
     float vout = reverse ? power_status.v_left : power_status.v_right;
     if (!(vin >= POWER_INPUT_MIN_VOLTS && vin <= POWER_INPUT_MAX_VOLTS))
         trip(POWER_FAULT_INPUT);
-    if (vout > active_target * 1.1f)
+    if (vout > active_target * POWER_OUTPUT_OVERVOLTAGE_RATIO)
         trip(POWER_FAULT_OUTPUT);
     if (fabsf(power_status.il) >= POWER_CURRENT_TRIP_AMPS || power_status.raw_il >= 4090U ||
         power_status.raw_il <= 5U) trip(POWER_FAULT_CURRENT);
