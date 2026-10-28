@@ -25,6 +25,7 @@
 #define TIMER_B HRTIM_TIMERINDEX_TIMER_B
 
 ADC_TypeDef test_adc1;
+ADC_TypeDef test_adc2;
 HRTIM_TypeDef test_hrtim1;
 RCC_TypeDef test_rcc;
 CoreDebug_Type test_core_debug;
@@ -37,6 +38,50 @@ static uint32_t protection_latched, protection_active;
 static unsigned protection_fault_on_poll;
 static unsigned protection_fault_after_safe_poll;
 static uint32_t advance_cycles_on_poll;
+
+#if POWER_BENCH_LATE_INPUT_ADC
+static unsigned input_init_step, input_fail_step, input_started;
+static uint32_t next_input_flags = ADC_ISR_EOC | ADC_ISR_EOS;
+static uint16_t early_input_raw;
+static unsigned override_early_input;
+static HAL_StatusTypeDef input_init_result(void)
+{ return ++input_init_step == input_fail_step ? HAL_ERROR : HAL_OK; }
+
+HAL_StatusTypeDef HAL_ADC_Init(ADC_HandleTypeDef *adc)
+{
+    CHECK(adc->Instance == ADC2);
+    CHECK(adc->Init.ClockPrescaler == ADC_CLOCK_ASYNC_DIV4);
+    CHECK(adc->Init.Resolution == ADC_RESOLUTION_12B);
+    CHECK(adc->Init.DataAlign == ADC_DATAALIGN_RIGHT);
+    CHECK(adc->Init.ScanConvMode == ADC_SCAN_DISABLE && adc->Init.NbrOfConversion == 1U);
+    CHECK(adc->Init.ContinuousConvMode == DISABLE && adc->Init.LowPowerAutoWait == DISABLE);
+    CHECK(adc->Init.DMAContinuousRequests == DISABLE && adc->Init.OversamplingMode == DISABLE);
+    CHECK(adc->Init.ExternalTrigConv == ADC_EXTERNALTRIG_HRTIM_TRG1);
+    CHECK(adc->Init.ExternalTrigConvEdge == ADC_EXTERNALTRIGCONVEDGE_RISING);
+    CHECK(adc->Init.Overrun == ADC_OVR_DATA_PRESERVED);
+    return input_init_result();
+}
+HAL_StatusTypeDef HAL_ADCEx_Calibration_Start(ADC_HandleTypeDef *adc, uint32_t mode)
+{
+    CHECK(adc->Instance == ADC2 && mode == ADC_SINGLE_ENDED && input_init_step == 1U);
+    return input_init_result();
+}
+HAL_StatusTypeDef HAL_ADC_ConfigChannel(ADC_HandleTypeDef *adc, ADC_ChannelConfTypeDef *cfg)
+{
+    CHECK(adc->Instance == ADC2 && input_init_step == 2U);
+    CHECK(cfg->Channel == ADC_CHANNEL_1 && cfg->Rank == ADC_REGULAR_RANK_1);
+    CHECK(cfg->SamplingTime == ADC_SAMPLETIME_24CYCLES_5);
+    CHECK(cfg->SingleDiff == ADC_SINGLE_ENDED && cfg->OffsetNumber == ADC_OFFSET_NONE);
+    return input_init_result();
+}
+HAL_StatusTypeDef HAL_ADC_Start(ADC_HandleTypeDef *adc)
+{
+    CHECK(adc->Instance == ADC2 && input_init_step == 5U);
+    HAL_StatusTypeDef result = input_init_result();
+    if (result == HAL_OK) input_started = 1U;
+    return result;
+}
+#endif
 
 #if defined(POWER_UNIFIED_DIAGNOSTICS) && POWER_UNIFIED_DIAGNOSTICS
 /* Hardware-only double: advance the real backend's CYCCNT reads. A delayed
@@ -102,21 +147,39 @@ HAL_StatusTypeDef HAL_ADCEx_InjectedStart(ADC_HandleTypeDef *adc)
 HAL_StatusTypeDef HAL_HRTIM_WaveformCompareConfig(HRTIM_HandleTypeDef *timer, uint32_t index,
     uint32_t unit, HRTIM_CompareCfgTypeDef *cfg)
 {
-    CHECK(timer->Instance == HRTIM1 && index == TIMER_A && unit == HRTIM_COMPAREUNIT_2);
+    CHECK(timer->Instance == HRTIM1 && index == TIMER_A);
+#if POWER_BENCH_LATE_INPUT_ADC
+    if (unit == HRTIM_COMPAREUNIT_4) {
+        CHECK(input_init_step == 3U && cfg->CompareValue == 23040U);
+        HRTIM1->sTimerxRegs[index].CMP4xR = cfg->CompareValue;
+        return input_init_result();
+    }
+#endif
+    CHECK(unit == HRTIM_COMPAREUNIT_2);
     HRTIM1->sTimerxRegs[index].CMP2xR = cfg->CompareValue;
     return HAL_OK;
 }
 HAL_StatusTypeDef HAL_HRTIM_ADCTriggerConfig(HRTIM_HandleTypeDef *timer, uint32_t index,
     HRTIM_ADCTriggerCfgTypeDef *cfg)
 {
-    CHECK(timer->Instance == HRTIM1 && index == HRTIM_ADCTRIGGER_2);
+    CHECK(timer->Instance == HRTIM1);
     CHECK(cfg->UpdateSource == HRTIM_ADCTRIGGERUPDATE_TIMER_A);
+#if POWER_BENCH_LATE_INPUT_ADC
+    if (index == HRTIM_ADCTRIGGER_1) {
+        CHECK(input_init_step == 4U && cfg->Trigger == HRTIM_ADCTRIGGEREVENT13_TIMERA_CMP4);
+        return input_init_result();
+    }
+#endif
+    CHECK(index == HRTIM_ADCTRIGGER_2);
     CHECK(cfg->Trigger == HRTIM_ADCTRIGGEREVENT24_TIMERA_CMP2);
     return HAL_OK;
 }
 HAL_StatusTypeDef HAL_HRTIM_WaveformCounterStart(HRTIM_HandleTypeDef *timer, uint32_t counters)
 {
     CHECK(timer->Instance == HRTIM1);
+#if POWER_BENCH_LATE_INPUT_ADC
+    CHECK(input_started && input_init_step == 6U);
+#endif
     counters_started = counters;
     return HAL_OK;
 }
@@ -158,6 +221,15 @@ static void irq(float left, float right, float il, uint32_t adc_flags,
     HRTIM1->sTimerxRegs[TIMER_B].TIMxISR = HRTIM_TIMISR_REP;
     ADC1->JDR1 = raw_current(il);
     ADC1->JDR2 = raw_voltage(left, 0.0461f);
+#if POWER_BENCH_LATE_INPUT_ADC
+    if (override_early_input) {
+        ADC1->JDR2 = early_input_raw;
+        override_early_input = 0U;
+    }
+    ADC2->DR = raw_voltage(left, 0.0461f);
+    ADC2->ISR = next_input_flags;
+    next_input_flags = ADC_ISR_EOC | ADC_ISR_EOS;
+#endif
     ADC1->JDR3 = raw_voltage(right, 0.04666f);
     /* ADC ISR is supplied afresh each time. The ADC W1C write itself does
      * not need emulation because the next period replaces this register. */
@@ -260,6 +332,78 @@ static void expect_fault(uint32_t fault)
     CHECK(enabled_outputs == 0U && !Power_IsStartPending());
 }
 
+#if POWER_BENCH_LATE_INPUT_ADC
+static void late_input_sampling(void)
+{
+    CHECK(adc_config_count == 3U && adc_channels[0] == ADC_CHANNEL_3);
+    CHECK(adc_channels[1] == ADC_CHANNEL_1 && adc_channels[2] == ADC_CHANNEL_2);
+    CHECK(HRTIM1->sTimerxRegs[TIMER_A].CMP2xR == 8000U);
+    CHECK(HRTIM1->sTimerxRegs[TIMER_A].CMP4xR == 23040U);
+    stopped_samples(12.0f, 0.0f, 0.0f);
+    early_input_raw = raw_voltage(16.0f, 0.0461f);
+    override_early_input = 1U;
+    period(12.0f, 0.0f, 0.0f);
+    CHECK(fabsf(power_status.v_left - 12.0f) < 0.02f);
+    CHECK(request(1U, 6.0f));
+    arm_pending(1U, 12.0f, 0.0f);
+    override_early_input = 1U;
+    period(12.0f, 0.2f, 0.1f);
+    CHECK(power_status.state == POWER_RUNNING && power_status.fault == 0U);
+    CHECK(fabsf(forward_U.V_left - 12.0f) < 0.02f);
+    CHECK(fabsf(forward_U.V_right - 0.2f) < 0.02f);
+    CHECK(fabsf(forward_U.IL - 0.1f) < 0.01f);
+    CHECK(ADC2->ISR == (ADC_ISR_EOC | ADC_ISR_EOS | ADC_ISR_OVR)); /* W1C strobe */
+    const float bad_volts[] = {9.9f, 14.1f};
+    for (unsigned n = 0; n < 2U; ++n) {
+        start_running(1U, 12.0f, 6.0f);
+        early_input_raw = raw_voltage(12.0f, 0.0461f);
+        override_early_input = 1U;
+        period(bad_volts[n], 0.0f, 0.0f);
+        expect_fault(POWER_FAULT_INPUT);
+        CHECK(fabsf(power_status.fault_input_volts - bad_volts[n]) < 0.02f);
+        CHECK(power_status.fault_raw_vh == raw_voltage(bad_volts[n], 0.0461f));
+    }
+    const uint32_t invalid[] = {0U, ADC_ISR_EOC, ADC_ISR_EOS,
+                               ADC_ISR_EOC | ADC_ISR_EOS | ADC_ISR_OVR};
+    const unsigned prep_cycles[] = {0U, 1U, 31U, 33U};
+    for (unsigned bad = 0U; bad < 4U; ++bad) {
+        for (unsigned phase = 0U; phase < 4U; ++phase) {
+            stopped_samples(12.0f, 0.0f, 0.0f);
+            CHECK(request(1U, 6.0f));
+            for (unsigned n = 0; n < prep_cycles[phase]; ++n) period(12.0f, 0.0f, 0.0f);
+            next_input_flags = invalid[bad];
+            period(12.0f, 0.0f, 0.0f);
+            expect_fault(POWER_FAULT_ADC);
+            CHECK(!Power_SamplesAreValid());
+        }
+        stopped_samples(12.0f, 0.0f, 0.0f);
+        next_input_flags = invalid[bad];
+        period(12.0f, 0.0f, 0.0f);
+        CHECK(!Power_SamplesAreValid() && enabled_outputs == 0U);
+        CHECK(!request(1U, 6.0f));
+    }
+    stopped_samples(12.0f, 0.0f, 0.0f);
+    puts("Late input ADC2: independent phase/source, no stale fallback, startup/run guards: PASS");
+}
+
+static void late_input_init_failures(void)
+{
+    ADC_HandleTypeDef adc = {.Instance = ADC1};
+    HRTIM_HandleTypeDef timer = {HRTIM1};
+    for (unsigned fail = 1U; fail <= 6U; ++fail) {
+        input_init_step = input_started = counters_started = 0U;
+        input_fail_step = fail;
+        enabled_outputs = ALL_OUTPUTS;
+        before_call();
+        CHECK(Power_Init(&adc, &timer) == HAL_ERROR);
+        after_call();
+        CHECK(input_init_step == fail && counters_started == 0U && enabled_outputs == 0U);
+    }
+    input_fail_step = 0U;
+    puts("Late input ADC2: all six HAL setup/arm failures keep counters and outputs off: PASS");
+}
+#endif
+
 static void cold_start_samples_rechecked(void)
 {
 #if defined(POWER_BENCH_FAST_BUCK) && POWER_BENCH_FAST_BUCK
@@ -326,7 +470,7 @@ static void cold_start_samples_rechecked(void)
 
 static void cold_boot(void)
 {
-    ADC_HandleTypeDef adc = {ADC1};
+    ADC_HandleTypeDef adc = {.Instance = ADC1};
     HRTIM_HandleTypeDef timer = {HRTIM1};
     RCC->APB2ENR = RCC_APB2ENR_HRTIM1EN;
     enabled_outputs = ALL_OUTPUTS; /* Init must force even a stale enable off. */
@@ -878,7 +1022,7 @@ static void unified_first_fault_diagnostics(void)
 #if defined(POWER_BENCH_12V_BUCK_TEST) && POWER_BENCH_12V_BUCK_TEST
 int main(void)
 {
-    ADC_HandleTypeDef adc = {ADC1};
+    ADC_HandleTypeDef adc = {.Instance = ADC1};
     HRTIM_HandleTypeDef timer = {HRTIM1};
     protection_ready = 0U;
     RCC->APB2ENR = RCC_APB2ENR_HRTIM1EN;
@@ -887,6 +1031,9 @@ int main(void)
     after_call();
     CHECK(power_status.protection_ready == 0U);
     CHECK(power_status.state == POWER_STOPPED && enabled_outputs == 0U);
+#if POWER_BENCH_LATE_INPUT_ADC
+    late_input_sampling();
+#endif
 #if defined(POWER_UNIFIED_DIAGNOSTICS) && POWER_UNIFIED_DIAGNOSTICS
     unified_first_fault_diagnostics();
 #endif
@@ -1068,6 +1215,9 @@ int main(void)
         expect_fault(POWER_FAULT_START);
     }
     puts("Bench debugger start/stop follows the same restricted backend: PASS");
+#if POWER_BENCH_LATE_INPUT_ADC
+    late_input_init_failures();
+#endif
     return EXIT_SUCCESS;
 }
 #else

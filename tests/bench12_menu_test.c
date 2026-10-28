@@ -1,4 +1,5 @@
 #include "power_menu.h"
+#include "power_build_config.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -13,7 +14,9 @@ int main(void)
     assert(menu.settings[MENU_FORWARD].input_volts == 12U);
     assert(menu.settings[MENU_FORWARD].output_volts == 6U);
     Menu_Render(&menu, &data, &frame);
-#if defined(POWER_BENCH_FAST_BUCK) && POWER_BENCH_FAST_BUCK
+#if POWER_BENCH_LATE_INPUT_ADC
+    assert(strstr(frame.rows[0], "12V BUCK ADC2"));
+#elif defined(POWER_BENCH_FAST_BUCK) && POWER_BENCH_FAST_BUCK
     assert(strstr(frame.rows[0], "12V BUCK FAST"));
 #elif defined(POWER_CCM_CONTROL) && POWER_CCM_CONTROL && !POWER_UNIFIED_DIAGNOSTICS
     assert(strstr(frame.rows[0], "12V CCM BASE"));
@@ -27,7 +30,9 @@ int main(void)
     (void)Menu_HandleKey(&menu, MENU_KEY_OK, &data);
     assert(Menu_Mode(&menu) == MENU_MODE_BUCK);
     Menu_Render(&menu, &data, &frame);
-#if defined(POWER_BENCH_FAST_BUCK) && POWER_BENCH_FAST_BUCK
+#if POWER_BENCH_LATE_INPUT_ADC
+    assert(strstr(frame.rows[0], "SW-A2"));
+#elif defined(POWER_BENCH_FAST_BUCK) && POWER_BENCH_FAST_BUCK
     assert(strstr(frame.rows[0], "SW-FAST"));
 #elif defined(POWER_CCM_CONTROL) && POWER_CCM_CONTROL && !POWER_UNIFIED_DIAGNOSTICS
     assert(strstr(frame.rows[0], "SW-BASE"));

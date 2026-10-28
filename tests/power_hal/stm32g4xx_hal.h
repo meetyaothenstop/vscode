@@ -7,14 +7,14 @@
 #include <stdint.h>
 
 typedef enum { HAL_OK = 0, HAL_ERROR = 1, HAL_BUSY = 2, HAL_TIMEOUT = 3 } HAL_StatusTypeDef;
-typedef struct { volatile uint32_t ISR, JDR1, JDR2, JDR3; } ADC_TypeDef;
+typedef struct { volatile uint32_t ISR, JDR1, JDR2, JDR3, DR; } ADC_TypeDef;
 typedef struct {
     /* Synthetic W1C semantics: clearing REP writes zero to this shared cell.
      * Real silicon has separate ISR/ICR addresses and writes one to clear.
      * Aliasing only these fixture registers lets the unchanged production
      * write clear REP, including its end-of-ISR pending-period check. */
     union { volatile uint32_t TIMxISR; volatile uint32_t TIMxICR; };
-    volatile uint32_t TIMxDIER, CNTxR, CMP1xR, CMP2xR, CMP3xR, OUTxR, FLTxR;
+    volatile uint32_t TIMxDIER, CNTxR, CMP1xR, CMP2xR, CMP3xR, CMP4xR, OUTxR, FLTxR;
 } HRTIM_Timerx_TypeDef;
 typedef struct {
     volatile uint32_t ODISR, OENR, CR1, CR2, ISR, ICR, IER;
@@ -30,7 +30,16 @@ typedef struct { volatile uint32_t CR, MCR, DHR12R1, DHR12R2, DOR1, DOR2; } DAC_
 typedef struct { volatile uint32_t CSR; } COMP_TypeDef;
 typedef struct { volatile uint32_t DEMCR; } CoreDebug_Type;
 typedef struct { volatile uint32_t CTRL, CYCCNT; } DWT_Type;
-typedef struct { ADC_TypeDef *Instance; } ADC_HandleTypeDef;
+typedef struct {
+    uint32_t ClockPrescaler, Resolution, DataAlign, GainCompensation, ScanConvMode;
+    uint32_t EOCSelection, LowPowerAutoWait, ContinuousConvMode, NbrOfConversion;
+    uint32_t DiscontinuousConvMode, ExternalTrigConv, ExternalTrigConvEdge;
+    uint32_t DMAContinuousRequests, Overrun, OversamplingMode;
+} ADC_InitTypeDef;
+typedef struct { ADC_TypeDef *Instance; ADC_InitTypeDef Init; } ADC_HandleTypeDef;
+typedef struct {
+    uint32_t Channel, Rank, SamplingTime, SingleDiff, OffsetNumber, Offset;
+} ADC_ChannelConfTypeDef;
 typedef struct { HRTIM_TypeDef *Instance; } HRTIM_HandleTypeDef;
 typedef struct {
     uint32_t InjectedNbrOfConversion, InjectedSamplingTime, InjectedSingleDiff;
@@ -55,6 +64,7 @@ typedef struct {
 typedef struct { uint32_t Source, Polarity, Filter, Lock; } HRTIM_FaultCfgTypeDef;
 
 extern ADC_TypeDef test_adc1;
+extern ADC_TypeDef test_adc2;
 extern HRTIM_TypeDef test_hrtim1;
 extern RCC_TypeDef test_rcc;
 extern CoreDebug_Type test_core_debug;
@@ -64,6 +74,7 @@ extern GPIO_TypeDef test_gpioa, test_gpiob;
 extern DAC_TypeDef test_dac3;
 extern COMP_TypeDef test_comp1, test_comp2;
 #define ADC1 (&test_adc1)
+#define ADC2 (&test_adc2)
 #define HRTIM1 (&test_hrtim1)
 #define RCC (&test_rcc)
 #define CoreDebug (&test_core_debug)
@@ -198,15 +209,29 @@ void test_hrtim_clear_flag(HRTIM_HandleTypeDef *, uint32_t);
 #define HRTIM_TIMDIER_REPIE (1U << 0)
 #define HRTIM_COMPAREUNIT_3 3U
 #define HRTIM_COMPAREUNIT_2 2U
+#define HRTIM_COMPAREUNIT_4 4U
 #define HRTIM_ADCTRIGGERUPDATE_TIMER_A 1U
 #define HRTIM_ADCTRIGGEREVENT13_TIMERA_CMP3 1U
 #define HRTIM_ADCTRIGGEREVENT24_TIMERA_CMP2 2U
+#define HRTIM_ADCTRIGGEREVENT13_TIMERA_CMP4 4U
 #define HRTIM_ADCTRIGGER_1 1U
 #define HRTIM_ADCTRIGGER_2 2U
 #define HRTIM1_TIMB_IRQn 1
 #define ADC_ISR_JEOS (1U << 0)
 #define ADC_ISR_JEOC (1U << 1)
 #define ADC_ISR_JQOVF (1U << 2)
+#define ADC_ISR_EOC (1U << 3)
+#define ADC_ISR_EOS (1U << 4)
+#define ADC_ISR_OVR (1U << 5)
+#define ADC_CLOCK_ASYNC_DIV4 4U
+#define ADC_RESOLUTION_12B 12U
+#define ADC_DATAALIGN_RIGHT 0U
+#define ADC_SCAN_DISABLE 0U
+#define ADC_EOC_SINGLE_CONV 1U
+#define ADC_EXTERNALTRIG_HRTIM_TRG1 21U
+#define ADC_EXTERNALTRIGCONVEDGE_RISING 1U
+#define ADC_OVR_DATA_PRESERVED 0U
+#define ADC_REGULAR_RANK_1 1U
 #define ADC_SAMPLETIME_24CYCLES_5 245U
 #define ADC_SINGLE_ENDED 0U
 #define ADC_OFFSET_NONE 0U
@@ -229,6 +254,10 @@ static inline void __disable_irq(void) { test_primask = 1U; }
 static inline void __set_PRIMASK(uint32_t value) { test_primask = value; }
 static inline void __DMB(void) { }
 uint32_t HAL_RCC_GetHCLKFreq(void);
+HAL_StatusTypeDef HAL_ADC_Init(ADC_HandleTypeDef *);
+HAL_StatusTypeDef HAL_ADCEx_Calibration_Start(ADC_HandleTypeDef *, uint32_t);
+HAL_StatusTypeDef HAL_ADC_ConfigChannel(ADC_HandleTypeDef *, ADC_ChannelConfTypeDef *);
+HAL_StatusTypeDef HAL_ADC_Start(ADC_HandleTypeDef *);
 HAL_StatusTypeDef HAL_ADCEx_InjectedConfigChannel(ADC_HandleTypeDef *, ADC_InjectionConfTypeDef *);
 HAL_StatusTypeDef HAL_ADCEx_InjectedStart(ADC_HandleTypeDef *);
 HAL_StatusTypeDef HAL_HRTIM_WaveformCompareConfig(HRTIM_HandleTypeDef *, uint32_t, uint32_t, HRTIM_CompareCfgTypeDef *);

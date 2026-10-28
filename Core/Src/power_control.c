@@ -24,6 +24,52 @@ static unsigned have_previous_entry;
 static volatile unsigned sample_valid;
 static PwmPlan resume_plan;
 
+#if POWER_BENCH_LATE_INPUT_ADC
+static ADC_HandleTypeDef input_adc;
+_Static_assert(POWER_INPUT_ADC_PHASE_TICKS > PWM_PERIOD_TICKS / 4U + 3U * 37U * 128U,
+               "Input phase must follow the original ADC1 sequence");
+_Static_assert(POWER_INPUT_ADC_PHASE_TICKS + 40U * 128U < PWM_PERIOD_TICKS,
+               "Input conversion plus rounded trigger latency must fit before REP");
+
+static HAL_StatusTypeDef configure_late_input(HRTIM_HandleTypeDef *hrtim)
+{
+    /* ADC1 MSP already enabled the shared ADC12 clock and PA0 analog input.
+     * PA0 is ADC12_IN1: no GPIO remap, shared-clock reset or ADC1 deinit. */
+    ADC_ChannelConfTypeDef channel = {0};
+    HRTIM_CompareCfgTypeDef compare = {0};
+    HRTIM_ADCTriggerCfgTypeDef trigger = {0};
+    input_adc = (ADC_HandleTypeDef){0};
+    input_adc.Instance = ADC2;
+    input_adc.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV4;
+    input_adc.Init.Resolution = ADC_RESOLUTION_12B;
+    input_adc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+    input_adc.Init.ScanConvMode = ADC_SCAN_DISABLE;
+    input_adc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+    input_adc.Init.NbrOfConversion = 1U;
+    input_adc.Init.ExternalTrigConv = ADC_EXTERNALTRIG_HRTIM_TRG1;
+    input_adc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
+    input_adc.Init.Overrun = ADC_OVR_DATA_PRESERVED;
+    if (HAL_ADC_Init(&input_adc) != HAL_OK ||
+        HAL_ADCEx_Calibration_Start(&input_adc, ADC_SINGLE_ENDED) != HAL_OK)
+        return HAL_ERROR;
+    channel.Channel = ADC_CHANNEL_1;
+    channel.Rank = ADC_REGULAR_RANK_1;
+    channel.SamplingTime = ADC_SAMPLETIME_24CYCLES_5;
+    channel.SingleDiff = ADC_SINGLE_ENDED;
+    channel.OffsetNumber = ADC_OFFSET_NONE;
+    if (HAL_ADC_ConfigChannel(&input_adc, &channel) != HAL_OK) return HAL_ERROR;
+    compare.CompareValue = POWER_INPUT_ADC_PHASE_TICKS;
+    if (HAL_HRTIM_WaveformCompareConfig(hrtim, TIMER_A, HRTIM_COMPAREUNIT_4,
+                                       &compare) != HAL_OK) return HAL_ERROR;
+    trigger.UpdateSource = HRTIM_ADCTRIGGERUPDATE_TIMER_A;
+    trigger.Trigger = HRTIM_ADCTRIGGEREVENT13_TIMERA_CMP4;
+    if (HAL_HRTIM_ADCTriggerConfig(hrtim, HRTIM_ADCTRIGGER_1, &trigger) != HAL_OK)
+        return HAL_ERROR;
+    ADC2->ISR = ADC_ISR_EOC | ADC_ISR_EOS | ADC_ISR_OVR;
+    return HAL_ADC_Start(&input_adc);
+}
+#endif
+
 #if POWER_UNIFIED_DIAGNOSTICS
 volatile PowerDiagnostics power_diag;
 static uint32_t diag_begin, diag_timer_active, diag_requested_mode;
@@ -309,6 +355,9 @@ HAL_StatusTypeDef Power_Init(ADC_HandleTypeDef *adc, HRTIM_HandleTypeDef *hrtim)
     trigger.Trigger = HRTIM_ADCTRIGGEREVENT24_TIMERA_CMP2;
     if (HAL_HRTIM_ADCTriggerConfig(hrtim, HRTIM_ADCTRIGGER_2, &trigger) != HAL_OK)
         return HAL_ERROR;
+#if POWER_BENCH_LATE_INPUT_ADC
+    if (configure_late_input(hrtim) != HAL_OK) return HAL_ERROR;
+#endif
     /* Flush initial preloads before starting both counters in one MCR write. */
     HRTIM1->sCommonRegs.CR2 = HRTIM_CR2_TASWU | HRTIM_CR2_TBSWU |
                              HRTIM_CR2_TARST | HRTIM_CR2_TBRST;
@@ -457,16 +506,31 @@ void Power_TimerIRQ(void)
     have_previous_entry = 1U;
     DIAG_CHECKPOINT(POWER_DIAG_CP_ENTRY);
     DIAG_STAGE(POWER_DIAG_STAGE_ADC);
-    if (!(flags & ADC_ISR_JEOS) || (flags & ADC_ISR_JQOVF)) {
+    if (!(flags & ADC_ISR_JEOS) || (flags & ADC_ISR_JQOVF)
+#if POWER_BENCH_LATE_INPUT_ADC
+        || (ADC2->ISR & (ADC_ISR_EOC | ADC_ISR_EOS | ADC_ISR_OVR)) !=
+           (ADC_ISR_EOC | ADC_ISR_EOS)
+#endif
+       ) {
         sample_valid = 0U;
         if (start_pending || (power_status.state != POWER_STOPPED &&
                               power_status.state != POWER_FAULT))
             trip(POWER_FAULT_ADC);
         ADC1->ISR = ADC_ISR_JQOVF | ADC_ISR_JEOS | ADC_ISR_JEOC;
+#if POWER_BENCH_LATE_INPUT_ADC
+        ADC2->ISR = ADC_ISR_EOC | ADC_ISR_EOS | ADC_ISR_OVR;
+#endif
         DIAG_IRQ_RETURN();
     }
     power_status.raw_il = (uint16_t)ADC1->JDR1;
+#if POWER_BENCH_LATE_INPUT_ADC
+    power_status.raw_vh = (uint16_t)ADC2->DR;
+    /* DR consumes EOC; clear EOS as well so no previous result is accepted.
+     * Never fall back to the earlier ADC1 JDR2 value if this sample is lost. */
+    ADC2->ISR = ADC_ISR_EOC | ADC_ISR_EOS | ADC_ISR_OVR;
+#else
     power_status.raw_vh = (uint16_t)ADC1->JDR2;
+#endif
     power_status.raw_vl = (uint16_t)ADC1->JDR3;
     ADC1->ISR = ADC_ISR_JEOS | ADC_ISR_JEOC;
     power_status.il = (float)power_status.raw_il * ADC_CURRENT_AMPS_PER_COUNT -

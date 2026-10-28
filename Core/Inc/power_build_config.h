@@ -42,6 +42,16 @@
 #error Fast Buck requires restricted 12 V bench, OLED mute and CCM placement.
 #endif
 
+/* Phase-only bench experiment: ADC2 reads the same PA0 input later, while
+ * ADC1 current/output sampling stays at the original injected trigger. */
+#ifndef POWER_BENCH_LATE_INPUT_ADC
+#define POWER_BENCH_LATE_INPUT_ADC POWER_BENCH_FAST_BUCK
+#endif
+#if POWER_BENCH_LATE_INPUT_ADC && !POWER_BENCH_FAST_BUCK
+#error Late input sampling is restricted to the FAST Buck bench.
+#endif
+#define POWER_INPUT_ADC_PHASE_TICKS 23040U /* 4.8 us of the 6.667 us PWM period */
+
 /* User-selected cold-start acceptance for the new bench image only.
  * Current is strictly below the limit; output voltage may equal its limit.
  * These are not the running overcurrent or HOLD-resume thresholds. */
