@@ -5,9 +5,9 @@
 #include <math.h>
 #include <stdio.h>
 
-int main(void)
+static void run(double input, double target, double voltage_peak_limit,
+                double voltage_tolerance)
 {
-    setvbuf(stdout, NULL, _IONBF, 0);
     /* Ideal switched stage with the real sample phase and one-period
      * compare preload delay. Excludes diode and analog sensor behavior.
      * Numerical substeps are not a replacement for PLECS or board tests. */
@@ -28,13 +28,13 @@ int main(void)
     assert(pending.left_compare >= PWM_MIN_COMPARE_TICKS);
     assert(PWM_MakePlan(0.04f / PWM_REFRESH_HIGH, 0, &pending));
     assert(pending.left_high >= 0.04f && pending.left_compare == PWM_MIN_COMPARE_TICKS);
-    forward_configure(0.1f, 6.0f, POWER_CURRENT_REFERENCE_LIMIT);
+    forward_configure(0.1f, (float)target, POWER_CURRENT_REFERENCE_LIMIT);
     forward_initialize(0.0f);
     forward_U.mode = 1.0f;
     assert(PWM_MakePlan(0.0f, 0, &pending));
     for (unsigned n = 0; n < 60000U; ++n) {
         active = pending;
-        forward_U.V_left = 12.0f;
+        forward_U.V_left = (float)input;
         forward_U.V_right = (float)sample_v;
         forward_U.IL = (float)sample_il;
         forward_step();
@@ -43,7 +43,7 @@ int main(void)
             double phase = (k + 0.5) / substeps;
             int left = phase >= 0.03 && phase < 0.03 + active.left_high;
             int right = phase >= 0.03 && phase < 0.03 + active.right_high;
-            il += dt * (12.0 * left - voltage * right - 0.05 * il) / 22e-6;
+            il += dt * (input * left - voltage * right - 0.05 * il) / 22e-6;
             /* Board population confirmed by user: 2x220uF + 2x10uF.
              * Nominal total only; ESR/parasitics/sensor errors are excluded. */
             voltage += dt * (right * il - voltage / 100.0) / 460e-6;
@@ -66,18 +66,31 @@ int main(void)
             if (k == 257U) sample_v = voltage;
         }
     }
-    printf("Bench ideal switching 12->6 V, 100 ohm, 0.5 A reference: Vout=%.3f V, peak IL=%.3f A, sampled peak=%.3f A\n",
+    printf("Bench ideal switching %.0f->%.0f V, 100 ohm, %.1f A reference: Vout=%.3f V, peak IL=%.3f A, sampled peak=%.3f A\n",
+           input, target, (double)POWER_CURRENT_REFERENCE_LIMIT,
            voltage, peak, sampled_peak);
     assert(forward_Y.EN_F_BUCK && !forward_Y.EN_F_BOOST);
-    assert(fabs(voltage - 6.0) < 0.5);
+    assert(fabs(voltage - target) < voltage_tolerance);
     printf("Nominal 460 uF startup peak: %.6f V at %.6f s\n",
            voltage_peak, voltage_peak_cycle / 150000.0);
-    /* Retain the nominal startup overshoot regression guard at 6.6 V,
-     * independently of the FAST bench's experimental 8 V protection. */
-    assert(voltage_peak <= 6.6);
+    /* Keep the nominal 10% startup overshoot regression guard separate
+     * from each bench profile's experimental output protection. */
+    assert(voltage_peak <= voltage_peak_limit);
     printf("Minimum sampled IL: %.3f A at cycle %u, voltage %.3f V\n",
            sampled_min, minimum_cycle, minimum_voltage);
     assert(sampled_min > -1.0);
     assert(sampled_peak < 1.5);
+}
+
+int main(void)
+{
+    setvbuf(stdout, NULL, _IONBF, 0);
+#if POWER_BENCH_24V_BUCK_TEST
+    const double inputs[] = {20.0, 24.0, 28.0};
+    for (unsigned n = 0; n < sizeof(inputs) / sizeof(inputs[0]); ++n)
+        run(inputs[n], 12.0, 13.2, 0.05);
+#else
+    run(12.0, 6.0, 6.6, 0.5);
+#endif
     return 0;
 }

@@ -110,38 +110,53 @@ static void test_reverse_boost_changeover_and_hold(void)
 #if POWER_BENCH_LIVE_OLED
 int main(void)
 {
-    measured.v_high = 12.0; measured.v_low = 5.9; measured.il = 0.1;
+#if POWER_BENCH_24V_BUCK_TEST
+    const double input = 24.0, target = 12.0;
+    const char *home_identity = "24V BUCK DMA OVP14", *parameter_identity = "SW24-14";
+    const char *input_setting = "24 V", *output_setting = "12 V";
+    const char *before_target = "11.90 V", *at_target = "12.00 V", *after_target = "12.10 V";
+#else
+    const double input = 12.0, target = 6.0;
+    const char *home_identity = "12V BUCK DMA OVP8", *parameter_identity = "SW-DMA8";
+    const char *input_setting = "12 V", *output_setting = "6 V";
+    const char *before_target = "5.90 V", *at_target = "6.00 V", *after_target = "6.10 V";
+#endif
+    measured.v_high = input; measured.v_low = target - 0.1; measured.il = 0.1;
     PowerUI_Init(); settle();
-    key(3); settle(); key(1); settle(); /* Parameter page, select start. */
+    assert(strstr(drawn.rows[0], home_identity));
+    key(3); settle();
+    assert(strstr(drawn.rows[2], input_setting) && strstr(drawn.rows[4], output_setting));
+    key(1); settle(); /* Parameter page, select start. */
     unsigned before = page_calls;
     key(3); settle();
-    assert(starts == 1U && pending && page_calls == before && !transport_allowed);
+    assert(starts == 1U && last_mode == 1U && last_target == (float)target &&
+           pending && page_calls == before && !transport_allowed);
     pending = 0;
     power_status.state = POWER_BOOTSTRAP; settle();
     power_status.state = POWER_ARMING; settle();
     assert(page_calls == before && !transport_allowed);
     power_status.state = POWER_RUNNING; settle();
     assert(page_calls > before && transport_allowed); /* Regression: old mute freezes here. */
-    assert(strstr(drawn.rows[6], "5.90 V"));
-    measured.v_low = 6.0; settle();
-    assert(strstr(drawn.rows[6], "6.00 V") && strstr(drawn.rows[7], "RUNNING"));
-    assert(strstr(drawn.rows[0], "SW-DMA8"));
+    assert(strstr(drawn.rows[6], before_target));
+    measured.v_low = target; settle();
+    assert(strstr(drawn.rows[6], at_target) && strstr(drawn.rows[7], "RUNNING"));
+    assert(strstr(drawn.rows[0], parameter_identity));
 
     transport = HAL_BUSY;
     unsigned old_clears = clears; before = page_calls;
-    measured.v_low = 6.1; settle();
+    measured.v_low = target + 0.1; settle();
     assert(clears == old_clears && page_calls == before); /* Do not mutate a frame in flight. */
     key(3); /* Selected STOP is handled before the busy transport. */
     assert(stops == 1U && power_status.state == POWER_STOPPED && page_calls == before);
     transport = HAL_OK; service(0);
     assert(last_page == 0U && clears == old_clears + 1U && strstr(drawn.rows[7], "STOPPED"));
-    assert(strstr(drawn.rows[6], "6.10 V"));
+    assert(strstr(drawn.rows[6], after_target));
 
     transport = HAL_BUSY; pending = 1; before = page_calls;
     service(0); assert(!transport_allowed && page_calls == before);
     key(4); assert(stops == 2U && !pending && page_calls == before);
     transport = HAL_OK; service(0);
-    assert(last_page == 0U && strstr(drawn.rows[0], "12V BUCK DMA OVP8"));
+    assert(last_page == 0U && strstr(drawn.rows[0], home_identity));
     transport = HAL_BUSY; old_clears = clears;
     power_status.state = POWER_FAULT; power_status.fault = 4U;
     service(0); assert(clears == old_clears);

@@ -6,8 +6,14 @@ try {
     $renameFlags = @('configure','initialize','step','terminate','U','Y','B','X','errorStatus','sampleTime','checksum') | ForEach-Object { '-Dforward_' + $_ + '=reference_forward_' + $_ }
     & gcc -std=c11 -O2 -Wall -Wextra -Werror -ICore/Inc @renameFlags -c Core/Src/forward.c -o $referenceObject
     if ($LASTEXITCODE -ne 0) { throw 'Reference controller compile failed' }
-    $fastFlags = @('-DPOWER_BENCH_12V_BUCK_TEST=1','-DPOWER_TEST_SKIP_OLED_ACTIVE=1','-DPOWER_CCM_CONTROL=1','-DPOWER_BENCH_FAST_BUCK=1')
+    $fastCoreFlags = @('-DPOWER_BENCH_12V_BUCK_TEST=1','-DPOWER_TEST_SKIP_OLED_ACTIVE=1','-DPOWER_CCM_CONTROL=1','-DPOWER_BENCH_FAST_BUCK=1')
+    $fastFlags = $fastCoreFlags + @('-DPOWER_BENCH_24V_BUCK_TEST=0')
+    $bench24Flags = $fastCoreFlags + @('-DPOWER_BENCH_24V_BUCK_TEST=1')
     $cases = @(
+        @{Name='power_bench24_test'; Sources=@('tests/power_control_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($bench24Flags + @('-Itests/power_hal','-Wno-unused-function'))}
+        @{Name='bench24_switching_test'; Sources=@('tests/bench12_switching_test.c','Core/Src/forward.c','Core/Src/pwm_plan.c'); Flags=$bench24Flags}
+        @{Name='bench24_menu_test'; Sources=@('tests/bench12_menu_test.c','Core/Src/power_menu.c'); Flags=$bench24Flags}
+        @{Name='bench24_ui_test'; Sources=@('tests/power_ui_test.c','Core/Src/power_ui.c','Core/Src/power_menu.c'); Flags=($bench24Flags + @('-Wno-unused-function'))}
         @{Name='forward_buck_equivalence_test'; Sources=@('tests/forward_buck_equivalence_test.c','Core/Src/forward.c',$referenceObject); Flags=$fastFlags}
         @{Name='power_buck_fast_test'; Sources=@('tests/power_control_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($fastFlags + @('-Itests/power_hal','-Wno-unused-function'))}
         @{Name='buck_fast_switching_test'; Sources=@('tests/bench12_switching_test.c','Core/Src/forward.c','Core/Src/pwm_plan.c'); Flags=$fastFlags}

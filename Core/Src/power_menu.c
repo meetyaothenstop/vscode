@@ -12,7 +12,8 @@ static int active(const MenuTelemetry *data)
 void Menu_Init(PowerMenu *menu)
 {
     memset(menu, 0, sizeof(*menu));
-    menu->settings[MENU_FORWARD] = (MenuSettings){12, POWER_FORWARD_DEFAULT_OUTPUT_VOLTS};
+    menu->settings[MENU_FORWARD] = (MenuSettings){POWER_FORWARD_DEFAULT_INPUT_VOLTS,
+                                                POWER_FORWARD_DEFAULT_OUTPUT_VOLTS};
     menu->settings[MENU_REVERSE] = (MenuSettings){36, 12};
 }
 
@@ -142,7 +143,9 @@ void Menu_Render(const PowerMenu *menu, const MenuTelemetry *data, MenuFrame *fr
         frame->rows[row][MENU_COLUMNS] = '\0';
     }
     if (menu->page == MENU_HOME) {
-        put(frame, 0, 0, POWER_BENCH_LIVE_OLED ? "12V BUCK DMA OVP8" :
+        put(frame, 0, 0, POWER_BENCH_24V_BUCK_TEST ?
+            (POWER_BENCH_LIVE_OLED ? "24V BUCK DMA OVP14" : "24V BUCK FAST OVP14") :
+            POWER_BENCH_LIVE_OLED ? "12V BUCK DMA OVP8" :
             POWER_BENCH_LATE_INPUT_ADC ? "12V BUCK ADC2 OVP8" :
             POWER_BENCH_FAST_BUCK ? "12V BUCK FAST OVP8" : POWER_CCM_CONTROL ?
             (POWER_UNIFIED_DIAGNOSTICS ? "12V CCM DIAG" : "12V CCM BASE") :
@@ -159,6 +162,7 @@ void Menu_Render(const PowerMenu *menu, const MenuTelemetry *data, MenuFrame *fr
                        menu->direction == MENU_FORWARD ? "FORWARD" : "REVERSE",
                        mode == MENU_MODE_BUCK ? "BUCK" :
                        (mode == MENU_MODE_BOOST ? "BOOST" : "EQUAL"),
+                       POWER_BENCH_24V_BUCK_TEST ? " SW24-14" :
                        POWER_BENCH_LIVE_OLED ? " SW-DMA8" :
                        POWER_BENCH_LATE_INPUT_ADC ? " SW-A2-8" : POWER_BENCH_FAST_BUCK ? " SW-FAST" :
                        POWER_CCM_CONTROL ? (POWER_UNIFIED_DIAGNOSTICS ? " SW-CCM" : " SW-BASE") :

@@ -10,11 +10,18 @@ int main(void)
     MenuFrame frame;
     MenuTelemetry data = {0};
     data.valid = 1U;
+#if POWER_BENCH_24V_BUCK_TEST
+    const unsigned expected_input = 24U, expected_output = 12U;
+#else
+    const unsigned expected_input = 12U, expected_output = 6U;
+#endif
     Menu_Init(&menu);
-    assert(menu.settings[MENU_FORWARD].input_volts == 12U);
-    assert(menu.settings[MENU_FORWARD].output_volts == 6U);
+    assert(menu.settings[MENU_FORWARD].input_volts == expected_input);
+    assert(menu.settings[MENU_FORWARD].output_volts == expected_output);
     Menu_Render(&menu, &data, &frame);
-#if POWER_BENCH_LIVE_OLED
+#if POWER_BENCH_24V_BUCK_TEST
+    assert(strstr(frame.rows[0], "24V BUCK DMA OVP14"));
+#elif POWER_BENCH_LIVE_OLED
     assert(strstr(frame.rows[0], "12V BUCK DMA OVP8"));
 #elif POWER_BENCH_LATE_INPUT_ADC
     assert(strstr(frame.rows[0], "12V BUCK ADC2 OVP8"));
@@ -32,7 +39,11 @@ int main(void)
     (void)Menu_HandleKey(&menu, MENU_KEY_OK, &data);
     assert(Menu_Mode(&menu) == MENU_MODE_BUCK);
     Menu_Render(&menu, &data, &frame);
-#if POWER_BENCH_LIVE_OLED
+#if POWER_BENCH_24V_BUCK_TEST
+    assert(strstr(frame.rows[0], "SW24-14"));
+    assert(strstr(frame.rows[2], "24 V"));
+    assert(strstr(frame.rows[4], "12 V"));
+#elif POWER_BENCH_LIVE_OLED
     assert(strstr(frame.rows[0], "SW-DMA8"));
 #elif POWER_BENCH_LATE_INPUT_ADC
     assert(strstr(frame.rows[0], "SW-A2-8"));
@@ -51,10 +62,11 @@ int main(void)
     (void)Menu_HandleKey(&menu, MENU_KEY_DOWN, &data);
     MenuRequest request = Menu_HandleKey(&menu, MENU_KEY_OK, &data);
     assert(request.action == MENU_ACTION_START);
-    assert(request.mode == MENU_MODE_BUCK && request.target_volts == 6.0f);
+    assert(request.mode == MENU_MODE_BUCK && request.target_volts == (float)expected_output);
     data.state = MENU_RUNNING;
     request = Menu_HandleKey(&menu, MENU_KEY_BACK, &data);
     assert(request.action == MENU_ACTION_STOP);
-    puts("Bench OLED identity, 12->6 default and menu start/stop: PASS");
+    printf("Bench OLED identity, %u->%u default and menu start/stop: PASS\n",
+           expected_input, expected_output);
     return 0;
 }

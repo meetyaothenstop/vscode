@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-29",
+  "base": "9799a57",
+  "project": "MDK-ARM/bench12_buck_fast.uvprojx",
+  "target": "bench12_buck_fast",
+  "profile": "POWER_BENCH_24V_BUCK_TEST defaults to FAST; explicit zero preserves old 12V profile",
+  "defaults_volts": {"input": 24, "output": 12},
+  "input_window_volts": [20, 28],
+  "output_trip_ratio": "14/12",
+  "current_amps": {"reference_limit": 1.0, "sampled_trip": 1.5, "cold_start_exclusive": 0.5},
+  "identity": ["24V BUCK DMA OVP14", "SW24-14"],
+  "hex_sha256": "F07116B02C42882430DAC75602AEECB8F07C36F70CA7D4FD1BD4841EB189E631",
+  "compiler": "ARM Compiler 6.18",
+  "size": {"code": 40416, "ro": 1288, "rw": 32, "zi": 4264},
+  "ccm": {"bytes": 3384, "run": "0x10000000", "load": "0x080095B0"},
+  "hardware": "User reports 12V->6V and OLED works; 24V candidate unflashed/unrun this task",
+  "board_timing_verified": false,
+  "host_test_groups_passed": 32,
+  "review": "No Critical/Important; optional early-input/muted 24V comparison-test compatibility deferred (default firmware unaffected)",
+  "physical_ratings": "Load resistor power and output capacitor voltage confirmation pending"
+}

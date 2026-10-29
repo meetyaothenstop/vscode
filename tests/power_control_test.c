@@ -335,28 +335,30 @@ static void expect_fault(uint32_t fault)
 #if POWER_BENCH_LATE_INPUT_ADC
 static void late_input_sampling(void)
 {
+    const float bench_source = POWER_BENCH_24V_BUCK_TEST ? 24.0f : 12.0f;
+    const float bench_target = POWER_BENCH_24V_BUCK_TEST ? 12.0f : 6.0f;
     CHECK(adc_config_count == 3U && adc_channels[0] == ADC_CHANNEL_3);
     CHECK(adc_channels[1] == ADC_CHANNEL_1 && adc_channels[2] == ADC_CHANNEL_2);
     CHECK(HRTIM1->sTimerxRegs[TIMER_A].CMP2xR == 8000U);
     CHECK(HRTIM1->sTimerxRegs[TIMER_A].CMP4xR == 23040U);
-    stopped_samples(12.0f, 0.0f, 0.0f);
+    stopped_samples(bench_source, 0.0f, 0.0f);
     early_input_raw = raw_voltage(16.0f, 0.0461f);
     override_early_input = 1U;
-    period(12.0f, 0.0f, 0.0f);
-    CHECK(fabsf(power_status.v_left - 12.0f) < 0.02f);
-    CHECK(request(1U, 6.0f));
-    arm_pending(1U, 12.0f, 0.0f);
+    period(bench_source, 0.0f, 0.0f);
+    CHECK(fabsf(power_status.v_left - bench_source) < 0.02f);
+    CHECK(request(1U, bench_target));
+    arm_pending(1U, bench_source, 0.0f);
     override_early_input = 1U;
-    period(12.0f, 0.2f, 0.1f);
+    period(bench_source, 0.2f, 0.1f);
     CHECK(power_status.state == POWER_RUNNING && power_status.fault == 0U);
-    CHECK(fabsf(forward_U.V_left - 12.0f) < 0.02f);
+    CHECK(fabsf(forward_U.V_left - bench_source) < 0.02f);
     CHECK(fabsf(forward_U.V_right - 0.2f) < 0.02f);
     CHECK(fabsf(forward_U.IL - 0.1f) < 0.01f);
     CHECK(ADC2->ISR == (ADC_ISR_EOC | ADC_ISR_EOS | ADC_ISR_OVR)); /* W1C strobe */
-    const float bad_volts[] = {9.9f, 14.1f};
+    const float bad_volts[] = {POWER_INPUT_MIN_VOLTS - 0.1f, POWER_INPUT_MAX_VOLTS + 0.1f};
     for (unsigned n = 0; n < 2U; ++n) {
-        start_running(1U, 12.0f, 6.0f);
-        early_input_raw = raw_voltage(12.0f, 0.0461f);
+        start_running(1U, bench_source, bench_target);
+        early_input_raw = raw_voltage(bench_source, 0.0461f);
         override_early_input = 1U;
         period(bad_volts[n], 0.0f, 0.0f);
         expect_fault(POWER_FAULT_INPUT);
@@ -368,21 +370,21 @@ static void late_input_sampling(void)
     const unsigned prep_cycles[] = {0U, 1U, 31U, 33U};
     for (unsigned bad = 0U; bad < 4U; ++bad) {
         for (unsigned phase = 0U; phase < 4U; ++phase) {
-            stopped_samples(12.0f, 0.0f, 0.0f);
-            CHECK(request(1U, 6.0f));
-            for (unsigned n = 0; n < prep_cycles[phase]; ++n) period(12.0f, 0.0f, 0.0f);
+            stopped_samples(bench_source, 0.0f, 0.0f);
+            CHECK(request(1U, bench_target));
+            for (unsigned n = 0; n < prep_cycles[phase]; ++n) period(bench_source, 0.0f, 0.0f);
             next_input_flags = invalid[bad];
-            period(12.0f, 0.0f, 0.0f);
+            period(bench_source, 0.0f, 0.0f);
             expect_fault(POWER_FAULT_ADC);
             CHECK(!Power_SamplesAreValid());
         }
-        stopped_samples(12.0f, 0.0f, 0.0f);
+        stopped_samples(bench_source, 0.0f, 0.0f);
         next_input_flags = invalid[bad];
-        period(12.0f, 0.0f, 0.0f);
+        period(bench_source, 0.0f, 0.0f);
         CHECK(!Power_SamplesAreValid() && enabled_outputs == 0U);
-        CHECK(!request(1U, 6.0f));
+        CHECK(!request(1U, bench_target));
     }
-    stopped_samples(12.0f, 0.0f, 0.0f);
+    stopped_samples(bench_source, 0.0f, 0.0f);
     puts("Late input ADC2: independent phase/source, no stale fallback, startup/run guards: PASS");
 }
 
@@ -406,61 +408,63 @@ static void late_input_init_failures(void)
 
 static void cold_start_samples_rechecked(void)
 {
+    const float bench_source = POWER_BENCH_24V_BUCK_TEST ? 24.0f : 12.0f;
+    const float bench_target = POWER_BENCH_24V_BUCK_TEST ? 12.0f : 6.0f;
 #if defined(POWER_BENCH_FAST_BUCK) && POWER_BENCH_FAST_BUCK
     const float output[] = {1.05f, 0.0f};
     const float current[] = {0.0f, 0.55f};
     /* New limits apply consistently to request, bootstrap and arming. */
     for (unsigned sign = 0; sign < 2; ++sign) {
         float il = sign ? -0.48f : 0.48f;
-        stopped_samples(12.0f, 0.9f, il);
-        CHECK(request(1U, 6.0f));
+        stopped_samples(bench_source, 0.9f, il);
+        CHECK(request(1U, bench_target));
         for (unsigned cycle = 0; cycle < 33; ++cycle) {
-            period(12.0f, 0.9f, il);
+            period(bench_source, 0.9f, il);
             CHECK(power_status.fault == 0U);
         }
         CHECK(power_status.state == POWER_RUNNING);
     }
     const float rejected_current[] = {-0.55f, 0.55f};
     for (unsigned sign = 0; sign < 2; ++sign) {
-        stopped_samples(12.0f, 0.0f, rejected_current[sign]);
-        CHECK(!request(1U, 6.0f));
+        stopped_samples(bench_source, 0.0f, rejected_current[sign]);
+        CHECK(!request(1U, bench_target));
         CHECK(power_status.fault_detail == 5U);
     }
     /* Direct physical values check the exact comparison boundary independently
      * of ADC quantization; period tests above exercise real conversion. */
-    stopped_samples(12.0f, 0.0f, 0.0f);
+    stopped_samples(bench_source, 0.0f, 0.0f);
     power_status.il = 0.5f;
-    CHECK(!request(1U, 6.0f) && power_status.fault_detail == 5U);
-    stopped_samples(12.0f, 0.0f, 0.0f);
+    CHECK(!request(1U, bench_target) && power_status.fault_detail == 5U);
+    stopped_samples(bench_source, 0.0f, 0.0f);
     power_status.il = -0.5f;
-    CHECK(!request(1U, 6.0f) && power_status.fault_detail == 5U);
-    stopped_samples(12.0f, 0.0f, 0.0f);
+    CHECK(!request(1U, bench_target) && power_status.fault_detail == 5U);
+    stopped_samples(bench_source, 0.0f, 0.0f);
     power_status.v_right = 1.0f;
-    CHECK(request(1U, 6.0f));
-    stopped_samples(12.0f, 0.0f, 0.0f);
+    CHECK(request(1U, bench_target));
+    stopped_samples(bench_source, 0.0f, 0.0f);
     power_status.v_right = 1.001f;
-    CHECK(!request(1U, 6.0f) && power_status.fault_detail == 6U);
+    CHECK(!request(1U, bench_target) && power_status.fault_detail == 6U);
 #else
     const float output[] = {0.4f, 0.0f};
     const float current[] = {0.0f, 0.3f};
 #endif
     for (unsigned n = 0U; n < 2U; ++n) {
-        stopped_samples(12.0f, 0.0f, 0.0f);
-        CHECK(request(1U, 6.0f));
-        period(12.0f, output[n], current[n]);
+        stopped_samples(bench_source, 0.0f, 0.0f);
+        CHECK(request(1U, bench_target));
+        period(bench_source, output[n], current[n]);
         expect_fault(POWER_FAULT_START);
         CHECK(power_status.fault_detail == (n == 0U ? 9U : 8U));
-        CHECK(fabsf(power_status.fault_v_left - 12.0f) < 0.02f);
+        CHECK(fabsf(power_status.fault_v_left - bench_source) < 0.02f);
         CHECK(fabsf(power_status.fault_v_right - output[n]) < 0.02f);
         CHECK(fabsf(power_status.fault_il - current[n]) < 0.02f);
         /* OENR retains any enable strobe even if ODISR follows in this IRQ. */
         CHECK(HRTIM1->sCommonRegs.OENR == 0U);
-        stopped_samples(12.0f, 0.0f, 0.0f);
-        CHECK(request(1U, 6.0f));
+        stopped_samples(bench_source, 0.0f, 0.0f);
+        CHECK(request(1U, bench_target));
         for (unsigned cycle = 0U; cycle < 31U; ++cycle)
-            period(12.0f, 0.0f, 0.0f);
+            period(bench_source, 0.0f, 0.0f);
         CHECK(power_status.state == POWER_ARMING);
-        period(12.0f, output[n], current[n]);
+        period(bench_source, output[n], current[n]);
         expect_fault(POWER_FAULT_START);
         CHECK(power_status.fault_detail == (n == 0U ? 9U : 8U));
         CHECK(HRTIM1->sCommonRegs.OENR == 0U);
@@ -1019,7 +1023,115 @@ static void unified_first_fault_diagnostics(void)
 }
 #endif
 
-#if defined(POWER_BENCH_12V_BUCK_TEST) && POWER_BENCH_12V_BUCK_TEST
+#if POWER_BENCH_24V_BUCK_TEST
+int main(void)
+{
+    ADC_HandleTypeDef adc = {.Instance = ADC1};
+    HRTIM_HandleTypeDef timer = {HRTIM1};
+    protection_ready = 0U;
+    RCC->APB2ENR = RCC_APB2ENR_HRTIM1EN;
+    before_call(); CHECK(Power_Init(&adc, &timer) == HAL_OK); after_call();
+    CHECK(power_status.protection_ready == 0U && power_status.state == POWER_STOPPED);
+    stopped_samples(24.0f, 0.0f, 0.0f);
+    CHECK(request(1U, 12.0f)); /* RED on the old 6V target cap/input window. */
+    CHECK(power_target_volts == 12.0f);
+    stop();
+    late_input_sampling();
+    cold_start_samples_rechecked();
+
+    const float inputs[] = {20.05f, 21.0f, 24.0f, 27.95f};
+    for (unsigned n = 0; n < sizeof(inputs)/sizeof(inputs[0]); ++n) {
+        start_running(1U, inputs[n], 12.0f);
+        for (unsigned k = 0; k < 16; ++k) period(inputs[n], 0.0f, 0.0f);
+        CHECK(power_status.state == POWER_RUNNING && !power_status.fault);
+    }
+    const float boundaries[] = {20.0f, 28.0f, 19.999f, 28.001f};
+    for (unsigned n = 0; n < 4; ++n) {
+        stopped_samples(24.0f, 0.0f, 0.0f);
+        power_status.v_left = boundaries[n]; /* Exact request comparison, not ADC rounding. */
+        CHECK(request(1U, 12.0f) == (n < 2));
+        if (n >= 2) CHECK(power_status.fault_detail == 4U);
+    }
+    const float outside[] = {19.9f, 28.1f};
+    const unsigned phases[] = {0U, 1U, 31U, 33U};
+    for (unsigned n = 0; n < 2; ++n) {
+        stopped_samples(outside[n], 0.0f, 0.0f);
+        CHECK(!request(1U, 12.0f) && power_status.fault_detail == 4U);
+        for (unsigned p = 0; p < 4; ++p) {
+            stopped_samples(24.0f, 0.0f, 0.0f);
+            CHECK(request(1U, 12.0f));
+            for (unsigned k = 0; k < phases[p]; ++k) period(24.0f, 0.0f, 0.0f);
+            period(outside[n], 0.0f, 0.0f);
+            expect_fault(POWER_FAULT_INPUT);
+            CHECK(power_status.fault_raw_vh == raw_voltage(outside[n], ADC_LEFT_VOLTAGE_GAIN));
+            CHECK(fabsf(power_status.fault_input_volts - outside[n]) < 0.02f);
+        }
+    }
+    puts("24V input: 20..28V request boundaries, fresh ADC2, bootstrap/arming/run first-sample trips: PASS");
+
+    const float invalid_targets[] = {0.0f, 12.001f, 24.0f, NAN, INFINITY};
+    for (unsigned n = 0; n < sizeof(invalid_targets)/sizeof(invalid_targets[0]); ++n) {
+        stopped_samples(24.0f, 0.0f, 0.0f);
+        CHECK(!request(1U, invalid_targets[n]) && power_status.fault_detail == 3U);
+    }
+    stopped_samples(24.0f, 0.0f, 0.0f); CHECK(request(1U, 1.0f));
+    const unsigned invalid_modes[] = {0U, 2U, 3U, 4U, 5U};
+    for (unsigned n = 0; n < 5; ++n) {
+        stopped_samples(24.0f, 0.0f, 0.0f);
+        CHECK(!request(invalid_modes[n], 12.0f) && power_status.fault_detail == 1U);
+    }
+    start_running(1U, 24.0f, 12.0f);
+    period(24.0f, 12.0f, 0.12f);
+    CHECK(power_status.state == POWER_RUNNING);
+    const float below = floorf(14.0f / ADC_RIGHT_VOLTS_PER_COUNT) * ADC_RIGHT_VOLTS_PER_COUNT;
+    const float above = below + ADC_RIGHT_VOLTS_PER_COUNT;
+    CHECK(below <= 14.0f && above > 14.0f);
+    period(24.0f, below, 0.12f); CHECK(power_status.state == POWER_RUNNING);
+    period(24.0f, above, 0.12f); expect_fault(POWER_FAULT_OUTPUT);
+    CHECK(power_status.fault_raw_vl == raw_voltage(above, ADC_RIGHT_VOLTAGE_GAIN));
+    CHECK(fabsf(power_status.fault_v_right - above) < 0.001f);
+    period(24.0f, 12.0f, 0.12f); expect_fault(POWER_FAULT_OUTPUT);
+    CHECK(fabsf(power_status.fault_v_right - above) < 0.001f);
+    start_running(1U, 24.0f, 6.0f);
+    period(24.0f, 6.98f, 0.0f); CHECK(power_status.state == POWER_RUNNING);
+    period(24.0f, 7.03f, 0.0f); expect_fault(POWER_FAULT_OUTPUT);
+    puts("24->12V target bounds and14V adjacent ADC codes/first-fault latch,6V target7V proportional OVP: PASS");
+
+    start_running(1U, 24.0f, 12.0f);
+    for (unsigned k = 0; k < 16000; ++k) {
+        period(24.0f, 0.0f, 0.0f);
+        CHECK(power_status.state == POWER_RUNNING && forward_B.Saturation <= 1.000001f);
+    }
+    CHECK(forward_B.Saturation > 0.99f);
+    period(24.0f, 0.0f, 1.6f); expect_fault(POWER_FAULT_CURRENT);
+    start_running(1U, 24.0f, 12.0f);
+    period(24.0f, 0.0f, -1.2f); expect_fault(POWER_FAULT_REVERSE);
+    start_running(1U, 24.0f, 12.0f);
+    period(24.0f, 0.0f, 8.2f); expect_fault(POWER_FAULT_CURRENT);
+    start_running(1U, 24.0f, 12.0f);
+    irq(24.0f, 0.0f, 0.0f, 0U, 1000U, 640U); expect_fault(POWER_FAULT_ADC);
+    start_running(1U, 24.0f, 12.0f);
+    irq(24.0f, 0.0f, 0.0f, ADC_ISR_JEOS, 2000U, 640U); expect_fault(POWER_FAULT_TIMING);
+    CHECK(power_status.fault_detail == 1U);
+    start_running(1U, 24.0f, 12.0f);
+    advance_cycles_on_poll = 900U; period(24.0f, 0.0f, 0.0f);
+    expect_fault(POWER_FAULT_TIMING); CHECK(power_status.fault_detail == 3U);
+    clear_fault();
+    CHECK(power_status.state == POWER_STOPPED && !Power_IsStartPending() && !enabled_outputs);
+
+    stopped_samples(24.0f, 0.0f, 0.0f);
+    power_command = POWER_CMD_START_BUCK; service();
+    CHECK(Power_IsStartPending()); arm_pending(1U, 24.0f, 0.0f);
+    CHECK(power_status.v_reference < 12.0f);
+    power_command = POWER_CMD_STOP; service();
+    CHECK(power_status.state == POWER_STOPPED && !enabled_outputs);
+    CHECK(request(1U, 12.0f)); stop(); period(24.0f, 0.0f, 0.0f);
+    CHECK(power_status.state == POWER_STOPPED && !Power_IsStartPending() && !enabled_outputs);
+    puts("24V bench:1.0A reference/1.5A trip, reverse/ADC/timing, debugger and pending STOP preserved: PASS");
+    late_input_init_failures();
+    return EXIT_SUCCESS;
+}
+#elif defined(POWER_BENCH_12V_BUCK_TEST) && POWER_BENCH_12V_BUCK_TEST
 int main(void)
 {
     ADC_HandleTypeDef adc = {.Instance = ADC1};
