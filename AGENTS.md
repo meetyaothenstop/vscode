@@ -11,6 +11,9 @@
   Verify the remote branch points to the expected commit before reporting the
   upload complete. If network/authentication blocks a push, retain local commits
   and explicitly report that upload is still pending. Do not force-push.
+  If SSH authentication is unavailable, the same repository's HTTPS URL may be
+  used with existing Git credentials for the push; retain the SSH origin and
+  report the transport used. Never disable host verification to make a push work.
 - Keep README.md current with the active project and latest verified outcome.
 - Keep rebuildable binaries and IDE UI state out of Git. Never claim board
   timing or electrical behavior is verified from host tests alone.
