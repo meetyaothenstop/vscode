@@ -142,7 +142,8 @@ void Menu_Render(const PowerMenu *menu, const MenuTelemetry *data, MenuFrame *fr
         frame->rows[row][MENU_COLUMNS] = '\0';
     }
     if (menu->page == MENU_HOME) {
-        put(frame, 0, 0, POWER_BENCH_LATE_INPUT_ADC ? "12V BUCK ADC2 OVP8" :
+        put(frame, 0, 0, POWER_BENCH_LIVE_OLED ? "12V BUCK DMA OVP8" :
+            POWER_BENCH_LATE_INPUT_ADC ? "12V BUCK ADC2 OVP8" :
             POWER_BENCH_FAST_BUCK ? "12V BUCK FAST OVP8" : POWER_CCM_CONTROL ?
             (POWER_UNIFIED_DIAGNOSTICS ? "12V CCM DIAG" : "12V CCM BASE") :
             (POWER_UNIFIED_DIAGNOSTICS ? "12V UNIFIED DIAG" :
@@ -158,6 +159,7 @@ void Menu_Render(const PowerMenu *menu, const MenuTelemetry *data, MenuFrame *fr
                        menu->direction == MENU_FORWARD ? "FORWARD" : "REVERSE",
                        mode == MENU_MODE_BUCK ? "BUCK" :
                        (mode == MENU_MODE_BOOST ? "BOOST" : "EQUAL"),
+                       POWER_BENCH_LIVE_OLED ? " SW-DMA8" :
                        POWER_BENCH_LATE_INPUT_ADC ? " SW-A2-8" : POWER_BENCH_FAST_BUCK ? " SW-FAST" :
                        POWER_CCM_CONTROL ? (POWER_UNIFIED_DIAGNOSTICS ? " SW-CCM" : " SW-BASE") :
                        (POWER_UNIFIED_DIAGNOSTICS ? " SW-DIAG" :

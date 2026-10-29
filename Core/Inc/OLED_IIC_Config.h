@@ -26,8 +26,14 @@ void OLED_ON(void);
 void OLED_OFF(void);
 void OLED_CLS(void);
 void OLED_Init(void);
+/* Legacy full-refresh helpers are for the blocking backend. FAST live PowerUI
+ * uses DrawStr into RAM followed by TransferPoll/RefreshPage only. */
 void OLED_RefreshRAM(void);
 HAL_StatusTypeDef OLED_RefreshPage(uint8_t page);
+/* Live backend: RefreshPage OK means accepted, BUSY means no submission.
+ * Poll after keys: allow=0 drains a packet but never starts the data packet.
+ * ERROR latches display offline until reset; it does not stop power control. */
+HAL_StatusTypeDef OLED_TransferPoll(uint8_t allow);
 void OLED_ClearRAM(void);
 void OLED_SetPixel(signed short int x, signed short int y, unsigned char set_pixel);
 void OLED_DisplayMode(unsigned char mode);

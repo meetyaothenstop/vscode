@@ -56,6 +56,10 @@ static void sync_control_state(const MenuTelemetry *data)
         if (data->pending || data->state == MENU_STARTING || data->state == MENU_RUNNING)
             menu.editing = 0;
         dirty = 1;
+#if POWER_BENCH_LIVE_OLED
+        /* A completed old packet may drain, then restart the new state at page 0. */
+        next_page = MENU_ROWS;
+#endif
     }
     if (data->valid != last_valid) dirty = 1;
     last_state = data->state;
@@ -87,8 +91,20 @@ void PowerUI_Service(const AdcMeasurements *measurements)
     }
     sync_control_state(&data);
 
+#if POWER_BENCH_LIVE_OLED
+    uint8_t allow = (uint8_t)(!data.pending && data.state != MENU_STARTING);
+    HAL_StatusTypeDef transfer = OLED_TransferPoll(allow);
+    if (transfer == HAL_BUSY) return;
+    if (transfer != HAL_OK) {
+        display_failed = 1;
+        next_page = MENU_ROWS;
+        dirty = 1;
+        return;
+    }
+#endif
 #if POWER_TEST_SKIP_OLED_ACTIVE
-    if (data.pending || data.state == MENU_STARTING || data.state == MENU_RUNNING) {
+    if (data.pending || data.state == MENU_STARTING ||
+            (!POWER_BENCH_LIVE_OLED && data.state == MENU_RUNNING)) {
         /* Key/start/stop handling above stays live. Restart a complete
          * display frame once faulted/stopped instead of sending stale pages. */
         next_page = MENU_ROWS;
@@ -108,10 +124,11 @@ void PowerUI_Service(const AdcMeasurements *measurements)
         dirty = 0;
     }
     if (next_page < MENU_ROWS) {
-        if (OLED_RefreshPage(next_page) == HAL_OK) {
+        HAL_StatusTypeDef result = OLED_RefreshPage(next_page);
+        if (result == HAL_OK) {
             ++next_page;
             display_failed = 0;
-        } else {
+        } else if (result != HAL_BUSY) {
             /* An absent display never blocks key handling or power control. */
             display_failed = 1;
             retry_tick = now;

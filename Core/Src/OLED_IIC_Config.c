@@ -8,9 +8,132 @@
  */
 
 #include "OLED_IIC_Config.h"   // 对应的头文件
+#include "power_build_config.h"
+#include <string.h>
 
 /* 屏幕缓冲区：8页 × 128列 */
 unsigned char ScreenBuffer[SCREEN_PAGE_NUM][SCREEN_COLUMN];
+
+#if POWER_BENCH_LIVE_OLED
+/* All packets reside in ordinary SRAM, separate from the mutable drawing RAM.
+ * Callbacks only publish progress; the foreground starts the next packet. */
+typedef enum { OLED_IDLE, OLED_COMMAND, OLED_COMMAND_DONE,
+               OLED_DATA_READY, OLED_DATA, OLED_DATA_DONE, OLED_ERROR } OledPhase;
+static volatile OledPhase oled_phase = OLED_ERROR;
+static DMA_HandleTypeDef oled_dma;
+static uint8_t oled_commands[4], oled_data[SCREEN_COLUMN + 1];
+static uint8_t oled_offline;
+static uint32_t oled_packet_tick;
+extern I2C_HandleTypeDef hi2c1;
+
+static HAL_StatusTypeDef oled_fail(void)
+{
+    oled_phase = OLED_ERROR;
+    if (!oled_offline) {
+        oled_offline = 1;
+        /* Do not abort synchronously or reuse a possibly active DMA buffer. */
+        HAL_NVIC_DisableIRQ(DMA1_Channel1_IRQn);
+        HAL_NVIC_DisableIRQ(I2C1_EV_IRQn);
+        HAL_NVIC_DisableIRQ(I2C1_ER_IRQn);
+    }
+    return HAL_ERROR;
+}
+
+static void oled_dma_init(void)
+{
+    oled_phase = OLED_ERROR;
+    oled_offline = 0;
+    __HAL_RCC_DMA1_CLK_ENABLE();
+    __HAL_RCC_DMAMUX1_CLK_ENABLE();
+    oled_dma.Instance = DMA1_Channel1;
+    oled_dma.Init.Request = DMA_REQUEST_I2C1_TX;
+    oled_dma.Init.Direction = DMA_MEMORY_TO_PERIPH;
+    oled_dma.Init.PeriphInc = DMA_PINC_DISABLE;
+    oled_dma.Init.MemInc = DMA_MINC_ENABLE;
+    oled_dma.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    oled_dma.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    oled_dma.Init.Mode = DMA_NORMAL;
+    oled_dma.Init.Priority = DMA_PRIORITY_LOW;
+    if (HAL_DMA_Init(&oled_dma) != HAL_OK) { (void)oled_fail(); return; }
+    __HAL_LINKDMA(&hi2c1, hdmatx, oled_dma);
+    HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 3, 0);
+    HAL_NVIC_SetPriority(I2C1_EV_IRQn, 3, 0);
+    HAL_NVIC_SetPriority(I2C1_ER_IRQn, 3, 0);
+    HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+    HAL_NVIC_EnableIRQ(I2C1_EV_IRQn);
+    HAL_NVIC_EnableIRQ(I2C1_ER_IRQn);
+    oled_phase = OLED_IDLE;
+}
+
+void DMA1_Channel1_IRQHandler(void) { HAL_DMA_IRQHandler(&oled_dma); }
+void I2C1_EV_IRQHandler(void) { HAL_I2C_EV_IRQHandler(&hi2c1); }
+void I2C1_ER_IRQHandler(void) { HAL_I2C_ER_IRQHandler(&hi2c1); }
+
+void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *i2c)
+{
+    if (i2c != &hi2c1 || HAL_I2C_GetState(i2c) != HAL_I2C_STATE_READY) return;
+    if (oled_phase == OLED_COMMAND) oled_phase = OLED_COMMAND_DONE;
+    else if (oled_phase == OLED_DATA) oled_phase = OLED_DATA_DONE;
+}
+
+void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *i2c)
+{
+    if (i2c == &hi2c1 && oled_phase != OLED_IDLE) oled_phase = OLED_ERROR;
+}
+
+HAL_StatusTypeDef OLED_TransferPoll(uint8_t allow)
+{
+    OledPhase phase = oled_phase;
+    if (phase == OLED_ERROR) return oled_fail();
+    if (phase == OLED_COMMAND || phase == OLED_DATA) {
+        if (HAL_GetTick() - oled_packet_tick >= 50U) return oled_fail();
+        return HAL_BUSY;
+    }
+    if (phase == OLED_COMMAND_DONE || phase == OLED_DATA_READY) {
+        if (!allow) { oled_phase = OLED_IDLE; return HAL_OK; }
+        if (phase == OLED_COMMAND_DONE) oled_packet_tick = HAL_GetTick();
+        else if (HAL_GetTick() - oled_packet_tick >= 50U) return oled_fail();
+        oled_phase = OLED_DATA;
+        /* Master API has no memory-address polling stage in the local HAL. */
+        HAL_StatusTypeDef result = HAL_I2C_Master_Transmit_DMA(&hi2c1, OLED_ADDRESS,
+                oled_data, sizeof(oled_data));
+        if (result == HAL_BUSY) {
+            /* No DMA submitted: preserve the snapshot and deadline for retry. */
+            oled_phase = OLED_DATA_READY;
+            return HAL_BUSY;
+        }
+        if (result != HAL_OK) return oled_fail();
+        return HAL_BUSY;
+    }
+    if (phase == OLED_DATA_DONE) oled_phase = OLED_IDLE;
+    return HAL_OK;
+}
+
+HAL_StatusTypeDef OLED_RefreshPage(uint8_t page)
+{
+    if (page >= SCREEN_PAGE_NUM) return HAL_ERROR;
+    if (oled_phase == OLED_ERROR) return oled_fail();
+    if (oled_phase != OLED_IDLE) return HAL_BUSY;
+    oled_commands[0] = 0x00;
+    oled_commands[1] = (uint8_t)(0xB0U + page);
+    oled_commands[2] = 0x00;
+    oled_commands[3] = 0x10;
+    oled_data[0] = 0x40;
+    memcpy(&oled_data[1], ScreenBuffer[page], SCREEN_COLUMN);
+    oled_packet_tick = HAL_GetTick();
+    oled_phase = OLED_COMMAND;
+    HAL_StatusTypeDef result = HAL_I2C_Master_Transmit_DMA(&hi2c1, OLED_ADDRESS,
+            oled_commands, sizeof(oled_commands));
+    if (result == HAL_BUSY) {
+        /* Not accepted: UI retains its page and may retry after handling keys. */
+        oled_phase = OLED_IDLE;
+        return HAL_BUSY;
+    }
+    if (result != HAL_OK) return oled_fail();
+    return HAL_OK;
+}
+#else
+HAL_StatusTypeDef OLED_TransferPoll(uint8_t allow) { (void)allow; return HAL_OK; }
 
 HAL_StatusTypeDef OLED_RefreshPage(uint8_t page)
 {
@@ -23,6 +146,7 @@ HAL_StatusTypeDef OLED_RefreshPage(uint8_t page)
     return HAL_I2C_Mem_Write(&hi2c1, OLED_ADDRESS, 0x40,
         I2C_MEMADD_SIZE_8BIT, ScreenBuffer[page], SCREEN_COLUMN, 20);
 }
+#endif
 
 /**
  * @brief  通过I2C向OLED寄存器写一个字节
@@ -134,6 +258,9 @@ void OLED_Init(void)
     WriteCmd(0xAF);           // 打开OLED显示
     
     OLED_CLS();               // 初始化完成后清屏
+#if POWER_BENCH_LIVE_OLED
+    oled_dma_init();          // Boot only: called before Power_Init and PWM start.
+#endif
 }
 
 /**

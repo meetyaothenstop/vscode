@@ -14,7 +14,9 @@ int main(void)
     assert(menu.settings[MENU_FORWARD].input_volts == 12U);
     assert(menu.settings[MENU_FORWARD].output_volts == 6U);
     Menu_Render(&menu, &data, &frame);
-#if POWER_BENCH_LATE_INPUT_ADC
+#if POWER_BENCH_LIVE_OLED
+    assert(strstr(frame.rows[0], "12V BUCK DMA OVP8"));
+#elif POWER_BENCH_LATE_INPUT_ADC
     assert(strstr(frame.rows[0], "12V BUCK ADC2 OVP8"));
 #elif defined(POWER_BENCH_FAST_BUCK) && POWER_BENCH_FAST_BUCK
     assert(strstr(frame.rows[0], "12V BUCK FAST OVP8"));
@@ -30,7 +32,9 @@ int main(void)
     (void)Menu_HandleKey(&menu, MENU_KEY_OK, &data);
     assert(Menu_Mode(&menu) == MENU_MODE_BUCK);
     Menu_Render(&menu, &data, &frame);
-#if POWER_BENCH_LATE_INPUT_ADC
+#if POWER_BENCH_LIVE_OLED
+    assert(strstr(frame.rows[0], "SW-DMA8"));
+#elif POWER_BENCH_LATE_INPUT_ADC
     assert(strstr(frame.rows[0], "SW-A2-8"));
 #elif defined(POWER_BENCH_FAST_BUCK) && POWER_BENCH_FAST_BUCK
     assert(strstr(frame.rows[0], "SW-FAST"));

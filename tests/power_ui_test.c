@@ -1,6 +1,7 @@
 #include "power_ui.h"
 #include "power_menu.h"
 #include "power_control.h"
+#include "power_build_config.h"
 #include "key.h"
 #include "OLED_Function.h"
 #include <assert.h>
@@ -9,11 +10,13 @@
 
 volatile PowerStatus power_status;
 static uint32_t tick;
-static unsigned keys, scans, starts, stops, last_mode, page_calls, pending;
+static unsigned keys, scans, starts, stops, last_mode, page_calls, pending, clears, last_page;
 static float last_target;
 static int valid = 1, accept = 1, fail_display;
 static MenuFrame drawn;
 static AdcMeasurements measured;
+static HAL_StatusTypeDef transport = HAL_OK, submission = HAL_OK;
+static uint8_t transport_allowed;
 
 uint32_t HAL_GetTick(void) { return tick; }
 void Key_Scan(void) { ++scans; }
@@ -33,7 +36,7 @@ int Power_RequestStart(unsigned mode, float target)
     return accept;
 }
 void Power_Stop(void) { ++stops; pending = 0; power_status.state = POWER_STOPPED; }
-void OLED_ClearRAM(void) { memset(&drawn, 0, sizeof(drawn)); }
+void OLED_ClearRAM(void) { ++clears; memset(&drawn, 0, sizeof(drawn)); }
 void OLED_DrawStr(int16_t x, int16_t y, const char *text)
 {
     assert(x == 0 && y >= 0 && y <= 56 && y % 8 == 0);
@@ -42,9 +45,11 @@ void OLED_DrawStr(int16_t x, int16_t y, const char *text)
 }
 HAL_StatusTypeDef OLED_RefreshPage(uint8_t page)
 {
-    assert(page < 8); ++page_calls;
-    return fail_display ? HAL_ERROR : HAL_OK;
+    assert(page < 8); ++page_calls; last_page = page;
+    return fail_display ? HAL_ERROR : submission;
 }
+HAL_StatusTypeDef OLED_TransferPoll(uint8_t allow)
+{ transport_allowed = allow; return transport; }
 static void service(unsigned mask)
 {
     unsigned before = page_calls;
@@ -102,7 +107,59 @@ static void test_reverse_boost_changeover_and_hold(void)
     key(4);
     assert(stops == stopped_before + 1 && power_status.state == POWER_STOPPED);
 }
-#if defined(POWER_TEST_SKIP_OLED_ACTIVE) && POWER_TEST_SKIP_OLED_ACTIVE
+#if POWER_BENCH_LIVE_OLED
+int main(void)
+{
+    measured.v_high = 12.0; measured.v_low = 5.9; measured.il = 0.1;
+    PowerUI_Init(); settle();
+    key(3); settle(); key(1); settle(); /* Parameter page, select start. */
+    unsigned before = page_calls;
+    key(3); settle();
+    assert(starts == 1U && pending && page_calls == before && !transport_allowed);
+    pending = 0;
+    power_status.state = POWER_BOOTSTRAP; settle();
+    power_status.state = POWER_ARMING; settle();
+    assert(page_calls == before && !transport_allowed);
+    power_status.state = POWER_RUNNING; settle();
+    assert(page_calls > before && transport_allowed); /* Regression: old mute freezes here. */
+    assert(strstr(drawn.rows[6], "5.90 V"));
+    measured.v_low = 6.0; settle();
+    assert(strstr(drawn.rows[6], "6.00 V") && strstr(drawn.rows[7], "RUNNING"));
+    assert(strstr(drawn.rows[0], "SW-DMA8"));
+
+    transport = HAL_BUSY;
+    unsigned old_clears = clears; before = page_calls;
+    measured.v_low = 6.1; settle();
+    assert(clears == old_clears && page_calls == before); /* Do not mutate a frame in flight. */
+    key(3); /* Selected STOP is handled before the busy transport. */
+    assert(stops == 1U && power_status.state == POWER_STOPPED && page_calls == before);
+    transport = HAL_OK; service(0);
+    assert(last_page == 0U && clears == old_clears + 1U && strstr(drawn.rows[7], "STOPPED"));
+    assert(strstr(drawn.rows[6], "6.10 V"));
+
+    transport = HAL_BUSY; pending = 1; before = page_calls;
+    service(0); assert(!transport_allowed && page_calls == before);
+    key(4); assert(stops == 2U && !pending && page_calls == before);
+    transport = HAL_OK; service(0);
+    assert(last_page == 0U && strstr(drawn.rows[0], "12V BUCK DMA OVP8"));
+    transport = HAL_BUSY; old_clears = clears;
+    power_status.state = POWER_FAULT; power_status.fault = 4U;
+    service(0); assert(clears == old_clears);
+    transport = HAL_OK; service(0);
+    assert(last_page == 0U && strstr(drawn.rows[7], "FAULT:4"));
+
+    /* Submission BUSY also holds the page, without an error retry delay. */
+    submission = HAL_BUSY; service(0); unsigned held_page = last_page;
+    submission = HAL_OK; service(0); assert(last_page == held_page);
+
+    transport = HAL_ERROR; before = page_calls; unsigned old_scans = scans;
+    power_status.state = POWER_RUNNING;
+    key(4); settle();
+    assert(stops == 3U && scans == old_scans + 21U && page_calls == before);
+    puts("Live OLED: RUNNING telemetry, startup mute, busy/error STOP, immutable frames and full transition redraw: PASS");
+    return 0;
+}
+#elif defined(POWER_TEST_SKIP_OLED_ACTIVE) && POWER_TEST_SKIP_OLED_ACTIVE
 int main(void)
 {
     measured.v_high = 12.0; measured.v_low = 0.0; measured.il = 0.0;
@@ -130,7 +187,12 @@ int main(void)
     assert(page_calls == before);
     key(4); settle(); /* Back is another working stop path. */
     assert(stops == 2U && !pending && power_status.state == POWER_STOPPED);
-    assert(page_calls > before && strstr(drawn.rows[0], "OLED-MUTE"));
+    assert(page_calls > before);
+#if POWER_BENCH_FAST_BUCK
+    assert(strstr(drawn.rows[0], "12V BUCK ADC2 OVP8"));
+#else
+    assert(strstr(drawn.rows[0], "OLED-MUTE"));
+#endif
     power_status.state = POWER_FAULT;
     power_status.fault = 64U;
     power_status.fault_detail = 3U;

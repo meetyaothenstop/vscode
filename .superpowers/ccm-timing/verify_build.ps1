@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory=$true)][string]$MapPath,
     [Parameter(Mandatory=$true)][string]$HexPath,
-    [switch]$Uninstrumented
+    [switch]$Uninstrumented,
+    [switch]$LiveOled
 )
 $ErrorActionPreference = 'Stop'
 $mapText = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $MapPath))
@@ -103,3 +104,24 @@ for ($address=$loadBase; $address -lt ($loadBase+$codeSize); ++$address) {
     if (!$image.ContainsKey([uint32]$address)) { throw 'Incomplete CCM load image in Flash HEX' }
 }
 Write-Output ('CCM placement/copy/vector PASS: {0} bytes at0x{1:X8}, loaded from0x{2:X8}' -f $codeSize,$execBase,$loadBase)
+if ($LiveOled) {
+    $oledVectors = @(
+        @{Name='DMA1_Channel1_IRQHandler'; Irq=11},
+        @{Name='I2C1_EV_IRQHandler'; Irq=31},
+        @{Name='I2C1_ER_IRQHandler'; Irq=32}
+    )
+    foreach ($handler in $oledVectors) {
+        $address = Get-SymbolAddress $handler.Name
+        if ((Read-U32 (0x08000000 + (16+$handler.Irq)*4)) -ne ($address -bor 1) -or
+            $mapText -notmatch ('(?m)^\s+' + $handler.Name + '\s+0x[0-9a-fA-F]+\s+Thumb Code\s+\d+\s+oled_iic_config\.o')) {
+            throw ('OLED vector is not the driver implementation: ' + $handler.Name)
+        }
+    }
+    foreach ($buffer in @(@{Name='oled_commands'; Size=4}, @{Name='oled_data'; Size=129}, @{Name='oled_dma'; Size=96})) {
+        $address = Get-SymbolAddress $buffer.Name
+        if ($address -lt 0x20000000 -or ($address+$buffer.Size) -gt 0x20018000) {
+            throw ('OLED DMA storage is outside ordinary SRAM: ' + $buffer.Name)
+        }
+    }
+    Write-Output 'OLED linked DMA/I2C vectors and ordinary-SRAM buffers: PASS'
+}

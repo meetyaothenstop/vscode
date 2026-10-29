@@ -42,6 +42,15 @@
 #error Fast Buck requires restricted 12 V bench, OLED mute and CCM placement.
 #endif
 
+/* FAST can refresh in RUNNING using asynchronous, low-priority I2C DMA.
+ * Override to zero for the original all-active-state OLED mute comparison. */
+#ifndef POWER_BENCH_LIVE_OLED
+#define POWER_BENCH_LIVE_OLED POWER_BENCH_FAST_BUCK
+#endif
+#if POWER_BENCH_LIVE_OLED && !POWER_BENCH_FAST_BUCK
+#error Live OLED is restricted to the FAST Buck bench.
+#endif
+
 /* Phase-only bench experiment: ADC2 reads the same PA0 input later, while
  * ADC1 current/output sampling stays at the original injected trigger. */
 #ifndef POWER_BENCH_LATE_INPUT_ADC

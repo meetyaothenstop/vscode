@@ -32,6 +32,9 @@ try {
         @{Name='power_menu_test'; Sources=@('tests/power_menu_test.c','Core/Src/power_menu.c')}
         @{Name='power_ui_test'; Sources=@('tests/power_ui_test.c','Core/Src/power_ui.c','Core/Src/power_menu.c')}
         @{Name='power_ui_oled_mute_test'; Sources=@('tests/power_ui_test.c','Core/Src/power_ui.c','Core/Src/power_menu.c'); Flags=@('-DPOWER_BENCH_12V_BUCK_TEST=1','-DPOWER_TEST_SKIP_OLED_ACTIVE=1','-Wno-unused-function')}
+        @{Name='power_ui_live_test'; Sources=@('tests/power_ui_test.c','Core/Src/power_ui.c','Core/Src/power_menu.c'); Flags=($fastFlags + @('-Wno-unused-function'))}
+        @{Name='power_ui_fast_mute_test'; Sources=@('tests/power_ui_test.c','Core/Src/power_ui.c','Core/Src/power_menu.c'); Flags=($fastFlags + @('-DPOWER_BENCH_LIVE_OLED=0','-Wno-unused-function'))}
+        @{Name='oled_dma_test'; Sources=@('tests/oled_dma_test.c','Core/Src/OLED_IIC_Config.c'); Flags=$fastFlags}
         # The existing vendor font header uses flattened arrays and unused bitmaps.
         @{Name='oled_render_test'; Sources=@('tests/oled_render_test.c','Core/Src/OLED_Function.c','Core/Src/OLED_IIC_Config.c','Core/Src/power_menu.c'); Flags=@('-Wno-missing-braces','-Wno-unused-variable')}
     )

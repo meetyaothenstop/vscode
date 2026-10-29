@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-29",
+  "base": "82e7f81",
+  "project": "MDK-ARM/bench12_buck_fast.uvprojx",
+  "target": "bench12_buck_fast",
+  "identity": ["12V BUCK DMA OVP8", "SW-DMA8"],
+  "hex_sha256": "9444BC857DAE17ED4159AE13CA9BB7AD78FC476571A9F70DAEE89ED407FFC924",
+  "compiler": "ARM Compiler 6.18",
+  "size": {"code": 40412, "ro": 1288, "rw": 32, "zi": 4264},
+  "ccm": {"bytes": 3384, "run": "0x10000000", "load": "0x080095AC"},
+  "board": "User reports stable 6V and frozen pre-run OLED; candidate not flashed this task",
+  "board_timing_verified": false,
+  "host_test_groups_passed": 28,
+  "review": "One Important HAL_BUSY issue fixed RED-to-GREEN; no Critical/minor findings",
+  "display": {"period_ms": 200, "packet_timeout_ms": 50, "irq_priority": 3, "error_policy": "offline until reset"}
+}
