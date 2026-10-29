@@ -16,6 +16,6 @@
   "host_test_groups_passed": 32,
   "review": "Fresh code review approved, noCritical/Important; historical hash referent clarified before commit",
   "old_fault": {"fault": 8, "raw_current": 3285, "sampled_amps": 1.6527462, "sampled_output_volts": 6.0804605, "root_cause_verified": false},
-  "flash": {"completed": false, "power_start_sent_by_agent": false},
+  "flash": {"completed": false, "power_start_sent_by_agent": false, "owner": "User-operated per latest instruction; agent does not control computer to flash"},
   "board_electrical_timing_verified": false
 }
