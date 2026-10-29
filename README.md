@@ -83,6 +83,18 @@ SWD请求1MHz（选择0.950MHz），Cache Memory关闭；保留不自动下载�
 
 ## 构建和版本记录
 
+GitHub 仓库：[meetyaothenstop/vscode](https://github.com/meetyaothenstop/vscode)。
+`origin` 使用 SSH 地址：
+
+```text
+git@github.com:meetyaothenstop/vscode.git
+```
+
+按用户约定，每次新版本或修改完成并验证后，都要提交并推送当前分支及该版本新建的
+标签到 GitHub，不再等待单独的上传请求。推送后核对远程分支提交号；本地提交不等于
+上传完成。若网络或认证失败，保留本地提交并明确说明待上传，不强制覆盖远程历史。
+仍只维护上面的唯一活动工程；上传源码、测试和文档，不上传可重建二进制及IDE界面状态。
+
 Keil MDK 工程使用本机 ARM Compiler 6.18；生成的 HEX 位于
 `MDK-ARM/bench12_buck_fast/bidreaction_bench12_buck_fast.hex`。
 编译产物可以重新生成，由 `.gitignore` 排除。
