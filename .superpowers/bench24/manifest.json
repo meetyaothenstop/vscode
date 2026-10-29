@@ -17,5 +17,12 @@
   "board_timing_verified": false,
   "host_test_groups_passed": 32,
   "review": "No Critical/Important; optional early-input/muted 24V comparison-test compatibility deferred (default firmware unaffected)",
-  "physical_ratings": "Load resistor power and output capacitor voltage confirmation pending"
+  "physical_ratings": {
+    "source": "User reply, 2026-10-29; no independent inspection",
+    "load_rated_watts": 150,
+    "output_capacitor_rated_volts": 50,
+    "input_capacitor_rated_volts": null,
+    "actual_load_setting": "Original model/test uses100ohm; rated150W is not an operating setpoint"
+  },
+  "download_readiness": "Fresh STOP/output-off, current input voltage and input capacitor rating requested; not yet confirmed"
 }

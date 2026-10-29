@@ -32,3 +32,6 @@ Cost if wrong: physically unsuitable components or unmodeled dynamics require re
 Final: Ruling: preserve unrelatedIDE/scratch and samebranch; user standing agreement authorizes
 selected-file commit/push, no merge or forcepush. RemoteSHA will be checked at delivery.
 Task2 complete: docs and softwarecandidate ready, hardwareconfirmationpending.
+2026-10-29 follow-up: user reports load rated150W andoutputcapacitor50V; record onlythese,
+not input/wholeboardratings. Firmwarehash unchangedF07116B02C42882430DAC75602AEECB8F07C36F70CA7D4FD1BD4841EB189E631.
+FreshSTOP/output-off,currentinputandinputcapacitorrating requested; no hardwareactions so far.
