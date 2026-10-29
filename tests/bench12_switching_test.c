@@ -73,7 +73,7 @@ int main(void)
     printf("Nominal 460 uF startup peak: %.6f V at %.6f s\n",
            voltage_peak, voltage_peak_cycle / 150000.0);
     /* Retain the nominal startup overshoot regression guard at 6.6 V,
-     * independently of the FAST bench's experimental 7 V protection. */
+     * independently of the FAST bench's experimental 8 V protection. */
     assert(voltage_peak <= 6.6);
     printf("Minimum sampled IL: %.3f A at cycle %u, voltage %.3f V\n",
            sampled_min, minimum_cycle, minimum_voltage);

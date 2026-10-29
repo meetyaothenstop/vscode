@@ -15,9 +15,9 @@ int main(void)
     assert(menu.settings[MENU_FORWARD].output_volts == 6U);
     Menu_Render(&menu, &data, &frame);
 #if POWER_BENCH_LATE_INPUT_ADC
-    assert(strstr(frame.rows[0], "12V BUCK ADC2 OVP7"));
+    assert(strstr(frame.rows[0], "12V BUCK ADC2 OVP8"));
 #elif defined(POWER_BENCH_FAST_BUCK) && POWER_BENCH_FAST_BUCK
-    assert(strstr(frame.rows[0], "12V BUCK FAST OVP7"));
+    assert(strstr(frame.rows[0], "12V BUCK FAST OVP8"));
 #elif defined(POWER_CCM_CONTROL) && POWER_CCM_CONTROL && !POWER_UNIFIED_DIAGNOSTICS
     assert(strstr(frame.rows[0], "12V CCM BASE"));
 #elif defined(POWER_CCM_CONTROL) && POWER_CCM_CONTROL
@@ -31,7 +31,7 @@ int main(void)
     assert(Menu_Mode(&menu) == MENU_MODE_BUCK);
     Menu_Render(&menu, &data, &frame);
 #if POWER_BENCH_LATE_INPUT_ADC
-    assert(strstr(frame.rows[0], "SW-A2-7"));
+    assert(strstr(frame.rows[0], "SW-A2-8"));
 #elif defined(POWER_BENCH_FAST_BUCK) && POWER_BENCH_FAST_BUCK
     assert(strstr(frame.rows[0], "SW-FAST"));
 #elif defined(POWER_CCM_CONTROL) && POWER_CCM_CONTROL && !POWER_UNIFIED_DIAGNOSTICS

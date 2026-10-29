@@ -1153,24 +1153,26 @@ int main(void)
     start_running(1U, 12.0f, 6.0f);
     period(12.0f, 6.6875f, 0.0f); /* Previously measured output peak. */
     CHECK(power_status.state == POWER_RUNNING && power_status.fault == 0U);
-    /* Nearest representable ADC samples on either side of 7.0 V. */
-    const float output_step = ADC_RIGHT_VOLTS_PER_COUNT;
-    const float below_seven = floorf(7.0f / output_step) * output_step;
-    const float above_seven = below_seven + output_step;
-    CHECK(below_seven <= 7.0f && above_seven > 7.0f);
-    period(12.0f, below_seven, 0.0f);
+    period(12.0f, 7.05056286f, 0.0f); /* Latest fault-4 ADC sample. */
     CHECK(power_status.state == POWER_RUNNING && power_status.fault == 0U);
-    period(12.0f, above_seven, 0.0f);
+    /* Nearest representable ADC samples on either side of 8.0 V. */
+    const float output_step = ADC_RIGHT_VOLTS_PER_COUNT;
+    const float below_eight = floorf(8.0f / output_step) * output_step;
+    const float above_eight = below_eight + output_step;
+    CHECK(below_eight <= 8.0f && above_eight > 8.0f);
+    period(12.0f, below_eight, 0.0f);
+    CHECK(power_status.state == POWER_RUNNING && power_status.fault == 0U);
+    period(12.0f, above_eight, 0.0f);
     expect_fault(POWER_FAULT_OUTPUT);
-    CHECK(fabsf(power_status.fault_v_right - above_seven) < 0.001f);
-    CHECK(power_status.fault_raw_vl == raw_voltage(above_seven, 0.04666f));
+    CHECK(fabsf(power_status.fault_v_right - above_eight) < 0.001f);
+    CHECK(power_status.fault_raw_vl == raw_voltage(above_eight, 0.04666f));
     /* Lower setpoints retain proportional output protection. */
     start_running(1U, 12.0f, 3.0f);
-    period(12.0f, 3.48f, 0.0f);
+    period(12.0f, 3.98f, 0.0f);
     CHECK(power_status.state == POWER_RUNNING && power_status.fault == 0U);
-    period(12.0f, 3.53f, 0.0f);
+    period(12.0f, 4.03f, 0.0f);
     expect_fault(POWER_FAULT_OUTPUT);
-    puts("FAST output protection: reported 6.6875V accepted; first ADC count above 7V trips: PASS");
+    puts("FAST output protection: reported 7.05056V accepted; first ADC count above 8V trips: PASS");
 #else
     start_running(1U, 12.0f, 6.0f);
     period(12.0f, 6.7f, 0.0f);
