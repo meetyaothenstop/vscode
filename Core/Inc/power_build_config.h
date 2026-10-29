@@ -78,7 +78,7 @@
 #define POWER_START_OUTPUT_MAX_VOLTS   1.0f
 /* Keep proportional protection when selecting a lower target. */
 #if POWER_BENCH_24V_BUCK_TEST
-#define POWER_OUTPUT_OVERVOLTAGE_RATIO (14.0f / 12.0f)
+#define POWER_OUTPUT_OVERVOLTAGE_RATIO (15.0f / 12.0f)
 #else
 #define POWER_OUTPUT_OVERVOLTAGE_RATIO (8.0f / 6.0f)
 #endif

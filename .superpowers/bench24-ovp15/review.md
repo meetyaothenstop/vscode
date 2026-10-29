@@ -1,0 +1,10 @@
+# Final fresh review
+
+Reviewerbench24_ovp15_review,gpt-6-astra/high,readonlyselected131ffe8→workingtree.
+Verdictapprove;noCritical/Important/Minor.
+Confirmed24-only15/12ratio,oldprofilesunchanged,6Atrip/ref1Aintact,14.2passand15V
+adjacentADC/firstfault/lower6→7.5protectiontests,21-columnidentitiesincludinglongesttitle.
+Saved32groupsPASS/ARMzeroerrorswarningsinspected;HEX/AXFhashesindependentlychecked
+againstmanifestandexportedHEX. Noindependenttestrerunorhardwareaction.
+Boardphysicalbehavior/rootcause/timing/downloadidentityremaintobeverified;
+useroperatesdownload. README/recordsdistinguishsoftwareandphysicalevidence.

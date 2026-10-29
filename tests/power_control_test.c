@@ -1083,9 +1083,11 @@ int main(void)
     start_running(1U, 24.0f, 12.0f);
     period(24.0f, 12.0f, 0.12f);
     CHECK(power_status.state == POWER_RUNNING);
-    const float below = floorf(14.0f / ADC_RIGHT_VOLTS_PER_COUNT) * ADC_RIGHT_VOLTS_PER_COUNT;
+    period(24.0f, 14.2f, 0.12f); /* Above old14V trip, below user-selected15V. */
+    CHECK(power_status.state == POWER_RUNNING && power_status.fault == 0U);
+    const float below = floorf(15.0f / ADC_RIGHT_VOLTS_PER_COUNT) * ADC_RIGHT_VOLTS_PER_COUNT;
     const float above = below + ADC_RIGHT_VOLTS_PER_COUNT;
-    CHECK(below <= 14.0f && above > 14.0f);
+    CHECK(below <= 15.0f && above > 15.0f);
     period(24.0f, below, 0.12f); CHECK(power_status.state == POWER_RUNNING);
     period(24.0f, above, 0.12f); expect_fault(POWER_FAULT_OUTPUT);
     CHECK(power_status.fault_raw_vl == raw_voltage(above, ADC_RIGHT_VOLTAGE_GAIN));
@@ -1093,9 +1095,9 @@ int main(void)
     period(24.0f, 12.0f, 0.12f); expect_fault(POWER_FAULT_OUTPUT);
     CHECK(fabsf(power_status.fault_v_right - above) < 0.001f);
     start_running(1U, 24.0f, 6.0f);
-    period(24.0f, 6.98f, 0.0f); CHECK(power_status.state == POWER_RUNNING);
-    period(24.0f, 7.03f, 0.0f); expect_fault(POWER_FAULT_OUTPUT);
-    puts("24->12V target bounds and14V adjacent ADC codes/first-fault latch,6V target7V proportional OVP: PASS");
+    period(24.0f, 7.48f, 0.0f); CHECK(power_status.state == POWER_RUNNING);
+    period(24.0f, 7.53f, 0.0f); expect_fault(POWER_FAULT_OUTPUT);
+    puts("24->12V target bounds and15V adjacent ADC codes/first-fault latch,6V target7.5V proportional OVP: PASS");
 
     start_running(1U, 24.0f, 12.0f);
     for (unsigned k = 0; k < 16000; ++k) {

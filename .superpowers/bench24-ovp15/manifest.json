@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-29",
+  "base": "131ffe8",
+  "project": "MDK-ARM/bench12_buck_fast.uvprojx",
+  "target": "bench12_buck_fast",
+  "user_report": "Fault4 after6A firmware delivery; requests15V output protection; no new RAM/waveform/board identity check",
+  "output_trip_ratio": "15/12",
+  "default_and_max_target_volts": 12,
+  "current_amps": {"reference_limit": 1.0, "sampled_trip": 6.0},
+  "input_window_volts": [20,28],
+  "identity": ["24V BUCK DMA OVP15 C6", "SW15-C6"],
+  "hex_sha256": "744BE08E77F5F78F9F5DD417255C01ABC313BEF55D8D97FED45A5A227BA5788C",
+  "axf_sha256": "37767FF02E36926995ED96B80C5C869A09F890C0C909138FA8FB256740D54D28",
+  "size": {"code": 40420, "ro": 1288, "rw": 32, "zi": 4264},
+  "ccm": {"bytes": 3380, "run": "0x10000000", "load": "0x080095B8"},
+  "host_test_groups_passed": 32,
+  "axf_export_matches_hex": true,
+  "review": "Fresh read-only review approved; noCritical/Important/Minor findings; hashes independently checked",
+  "download_owner": "User-operated; no hardware connection/flash/reset/start by agent this task",
+  "board_electrical_timing_verified": false
+}

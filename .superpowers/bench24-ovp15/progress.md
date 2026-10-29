@@ -1,0 +1,16 @@
+# SDD ledger — plan: docs/superpowers/plans/2026-10-29-bench24-ovp15.md
+
+Base131ffe8. Userreportsfault4andexplicit15Vtriprequest; noRAM/waveformthisevent.
+Ruling: existingproportionalpolicykept,24ratio15/12;6Vtarget7.5V.6Atrip/1Arefunchanged.
+Sameactiveproject/branch,IDE/scratchpreserved. User-operateddownload;nohardwareactions.
+REDoldbackend14.2Vfault4andoldhomeidentityassertionobserved. GREEN15/12backend;
+firsttitleS24-15C6too longforBOOST/EQUALcaughtbyGCCtruncationwarning,shortenedSW15-C6.
+Full32/32hostPASS;nominalmodel13.2Vpeak/1.5Asampleguarduntouched.
+ARM6.18zeroerrors/warningsCode40420RO1288RW32ZI4264;CCM3380load0x080095B8,
+CCM/copy/vector/uninstrumented+OLEDvectors/SRAM PASS. AXFexportexactHEXmatch
+744BE08E77F5F78F9F5DD417255C01ABC313BEF55D8D97FED45A5A227BA5788C.
+Independentreviewpending;docsupdatedwithuserfault4reportandunverifiedphysicalstate.
+Finalfreshreviewapproved,nofindings;hashes/logscheckedbyreviewer.
+Taskcompleteforsoftwaredelivery;selectedcommit/tag/pushandremoteSHAverificationnext.
+Useraskedmeaningof1Areference;explainedcontroltargetcapvsindependent6Asampletrip,
+actualripple/transientcanexceedreference,noreferencechangeauthorizedbythatquestion.
