@@ -13,16 +13,27 @@
   "compiler": "ARM Compiler 6.18",
   "size": {"code": 40416, "ro": 1288, "rw": 32, "zi": 4264},
   "ccm": {"bytes": 3384, "run": "0x10000000", "load": "0x080095B0"},
-  "hardware": "User reports 12V->6V and OLED works; 24V candidate unflashed/unrun this task",
+  "hardware": "User confirmed24Vinput andSTOP/outputoff;24Vfirmware programming/verify completed; power-start not sent by agent, OLED/output feedback pending",
   "board_timing_verified": false,
   "host_test_groups_passed": 32,
   "review": "No Critical/Important; optional early-input/muted 24V comparison-test compatibility deferred (default firmware unaffected)",
   "physical_ratings": {
-    "source": "User reply, 2026-10-29; no independent inspection",
+    "source": "User reply,2026-10-29:load150W/output50V,theninput/outputsymmetrical; noindependentinspection",
     "load_rated_watts": 150,
     "output_capacitor_rated_volts": 50,
-    "input_capacitor_rated_volts": null,
+    "input_capacitor_rated_volts": 50,
     "actual_load_setting": "Original model/test uses100ohm; rated150W is not an operating setpoint"
   },
-  "download_readiness": "Fresh STOP/output-off, current input voltage and input capacitor rating requested; not yet confirmed"
+  "download_readiness": "User confirmed current24Vinput and normalSTOP/outputoff before flash",
+  "flash": {
+    "date": "2026-10-29",
+    "keil_log_time": "18:46:59",
+    "method": "UV4 CLI-f, same active project/target; CU minimized-window recovery failed",
+    "result": "Erase Done; Programming Done; Verify OK",
+    "exit_code": 0,
+    "axf_sha256": "7DCC7EAE528F9825CB8F2F1F893B55269DDC84A38BD858F61DCF5968CAD3E790",
+    "axf_export_matches_candidate_hex": true,
+    "power_start_sent_by_agent": false,
+    "oled_identity_observed": false
+  }
 }

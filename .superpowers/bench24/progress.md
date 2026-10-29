@@ -35,3 +35,8 @@ Task2 complete: docs and softwarecandidate ready, hardwareconfirmationpending.
 2026-10-29 follow-up: user reports load rated150W andoutputcapacitor50V; record onlythese,
 not input/wholeboardratings. Firmwarehash unchangedF07116B02C42882430DAC75602AEECB8F07C36F70CA7D4FD1BD4841EB189E631.
 FreshSTOP/output-off,currentinputandinputcapacitorrating requested; no hardwareactions so far.
+Follow-up user:input/outputsymmetrical,currentinput24V;freshnormalSTOP/outputoff confirmed.
+CUwindow minimized twice despite launchrecovery;purposeKeilCLI-f used on sameproject/target.
+Flashlog18:46:59 EraseDone/ProgrammingDone/VerifyOK,exit0. AXFexportHEXexactlymatchescandidateSHA.
+AXFSHA7DCC7EAE528F9825CB8F2F1F893B55269DDC84A38BD858F61DCF5968CAD3E790.
+Power-startnotsent;OLEDidentityand12Vpoweroutputfeedbackpending. This isflashverificationonly.
