@@ -91,12 +91,15 @@
 #if POWER_BENCH_12V_BUCK_TEST
 #if POWER_BENCH_24V_BUCK_TEST
 /* Fixed-phase sampled current exceeds output/load average. Nominal 24->12 V
- * switching regression needs this headroom; sampled overcurrent stays 1.5 A. */
+ * switching regression needs this reference headroom. */
 #define POWER_CURRENT_REFERENCE_LIMIT       1.0f
+/* User-requested threshold experiment after fault8. This changes the sampled
+ * overcurrent trip only; reference/startup/ADC-rail/reverse checks remain. */
+#define POWER_CURRENT_TRIP_AMPS             6.0f
 #else
 #define POWER_CURRENT_REFERENCE_LIMIT       0.5f
-#endif
 #define POWER_CURRENT_TRIP_AMPS             1.5f
+#endif
 #if POWER_BENCH_24V_BUCK_TEST
 #define POWER_INPUT_MIN_VOLTS              20.0f
 #define POWER_INPUT_MAX_VOLTS              28.0f

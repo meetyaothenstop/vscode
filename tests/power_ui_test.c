@@ -112,7 +112,7 @@ int main(void)
 {
 #if POWER_BENCH_24V_BUCK_TEST
     const double input = 24.0, target = 12.0;
-    const char *home_identity = "24V BUCK DMA OVP14", *parameter_identity = "SW24-14";
+    const char *home_identity = "24V BUCK DMA OVP14 C6", *parameter_identity = "SW24-C6";
     const char *input_setting = "24 V", *output_setting = "12 V";
     const char *before_target = "11.90 V", *at_target = "12.00 V", *after_target = "12.10 V";
 #else

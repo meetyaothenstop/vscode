@@ -20,7 +20,7 @@ int main(void)
     assert(menu.settings[MENU_FORWARD].output_volts == expected_output);
     Menu_Render(&menu, &data, &frame);
 #if POWER_BENCH_24V_BUCK_TEST
-    assert(strstr(frame.rows[0], "24V BUCK DMA OVP14"));
+    assert(strstr(frame.rows[0], "24V BUCK DMA OVP14 C6"));
 #elif POWER_BENCH_LIVE_OLED
     assert(strstr(frame.rows[0], "12V BUCK DMA OVP8"));
 #elif POWER_BENCH_LATE_INPUT_ADC
@@ -40,7 +40,7 @@ int main(void)
     assert(Menu_Mode(&menu) == MENU_MODE_BUCK);
     Menu_Render(&menu, &data, &frame);
 #if POWER_BENCH_24V_BUCK_TEST
-    assert(strstr(frame.rows[0], "SW24-14"));
+    assert(strstr(frame.rows[0], "SW24-C6"));
     assert(strstr(frame.rows[2], "24 V"));
     assert(strstr(frame.rows[4], "12 V"));
 #elif POWER_BENCH_LIVE_OLED

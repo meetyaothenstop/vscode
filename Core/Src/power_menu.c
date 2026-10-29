@@ -144,7 +144,7 @@ void Menu_Render(const PowerMenu *menu, const MenuTelemetry *data, MenuFrame *fr
     }
     if (menu->page == MENU_HOME) {
         put(frame, 0, 0, POWER_BENCH_24V_BUCK_TEST ?
-            (POWER_BENCH_LIVE_OLED ? "24V BUCK DMA OVP14" : "24V BUCK FAST OVP14") :
+            (POWER_BENCH_LIVE_OLED ? "24V BUCK DMA OVP14 C6" : "24V FAST OVP14 C6") :
             POWER_BENCH_LIVE_OLED ? "12V BUCK DMA OVP8" :
             POWER_BENCH_LATE_INPUT_ADC ? "12V BUCK ADC2 OVP8" :
             POWER_BENCH_FAST_BUCK ? "12V BUCK FAST OVP8" : POWER_CCM_CONTROL ?
@@ -162,7 +162,7 @@ void Menu_Render(const PowerMenu *menu, const MenuTelemetry *data, MenuFrame *fr
                        menu->direction == MENU_FORWARD ? "FORWARD" : "REVERSE",
                        mode == MENU_MODE_BUCK ? "BUCK" :
                        (mode == MENU_MODE_BOOST ? "BOOST" : "EQUAL"),
-                       POWER_BENCH_24V_BUCK_TEST ? " SW24-14" :
+                       POWER_BENCH_24V_BUCK_TEST ? " SW24-C6" :
                        POWER_BENCH_LIVE_OLED ? " SW-DMA8" :
                        POWER_BENCH_LATE_INPUT_ADC ? " SW-A2-8" : POWER_BENCH_FAST_BUCK ? " SW-FAST" :
                        POWER_CCM_CONTROL ? (POWER_UNIFIED_DIAGNOSTICS ? " SW-CCM" : " SW-BASE") :

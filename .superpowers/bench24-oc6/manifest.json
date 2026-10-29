@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-29",
+  "base": "6aea1de",
+  "project": "MDK-ARM/bench12_buck_fast.uvprojx",
+  "target": "bench12_buck_fast",
+  "change": "24V sampled overcurrent trip1.5A to6A at user request after fault8",
+  "current_amps": {"reference_limit": 1.0, "sampled_trip": 6.0, "cold_start_exclusive": 0.5},
+  "input_window_volts": [20,28],
+  "default_target_volts": 12,
+  "output_trip_ratio": "14/12",
+  "identity": ["24V BUCK DMA OVP14 C6", "SW24-C6"],
+  "hex_sha256": "E1FA8AE4D6E6CC338F8278BAF22C41BF28DBF1C5F6CA2D62A61E24328145066B",
+  "axf_sha256": "54EC3EBD0F89929ECBEC8168348BEBEF47540247D6B7DD3CE4BDCB825D44DD27",
+  "size": {"code": 40424, "ro": 1288, "rw": 32, "zi": 4264},
+  "ccm": {"bytes": 3384, "run": "0x10000000", "load": "0x080095B8"},
+  "host_test_groups_passed": 32,
+  "review": "Fresh code review approved, noCritical/Important; historical hash referent clarified before commit",
+  "old_fault": {"fault": 8, "raw_current": 3285, "sampled_amps": 1.6527462, "sampled_output_volts": 6.0804605, "root_cause_verified": false},
+  "flash": {"completed": false, "power_start_sent_by_agent": false},
+  "board_electrical_timing_verified": false
+}

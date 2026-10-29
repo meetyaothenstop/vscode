@@ -1103,7 +1103,23 @@ int main(void)
         CHECK(power_status.state == POWER_RUNNING && forward_B.Saturation <= 1.000001f);
     }
     CHECK(forward_B.Saturation > 0.99f);
-    period(24.0f, 0.0f, 1.6f); expect_fault(POWER_FAULT_CURRENT);
+    /* User-selected6A sampled trip, not the1A current-reference clamp.
+     * Preserve the actual fault8 sample before evaluating adjacent ADC codes. */
+    period(24.0f, 6.08046055f, 1.6527462f);
+    CHECK(power_status.state == POWER_RUNNING && power_status.fault == 0U);
+    const unsigned below_raw = (unsigned)floorf((6.0f + ADC_CURRENT_ZERO_AMPS) /
+                                                ADC_CURRENT_AMPS_PER_COUNT);
+    const float below_current = below_raw * ADC_CURRENT_AMPS_PER_COUNT - ADC_CURRENT_ZERO_AMPS;
+    const float above_current = (below_raw + 1U) * ADC_CURRENT_AMPS_PER_COUNT - ADC_CURRENT_ZERO_AMPS;
+    CHECK(below_current < 6.0f && above_current > 6.0f && below_raw + 1U < 4090U);
+    period(24.0f, 6.0f, below_current);
+    CHECK(power_status.state == POWER_RUNNING && power_status.fault == 0U);
+    period(24.0f, 6.0f, above_current); expect_fault(POWER_FAULT_CURRENT);
+    CHECK(power_status.fault_raw_il == below_raw + 1U);
+    CHECK(fabsf(power_status.fault_il - above_current) < 0.00001f);
+    period(24.0f, 0.0f, 0.0f); expect_fault(POWER_FAULT_CURRENT);
+    CHECK(power_status.fault_raw_il == below_raw + 1U); /* First sample remains latched. */
+    puts("24V6A current protection: reported1.652746A passes; adjacent ADC codes below/above6A and first-fault latch: PASS");
     start_running(1U, 24.0f, 12.0f);
     period(24.0f, 0.0f, -1.2f); expect_fault(POWER_FAULT_REVERSE);
     start_running(1U, 24.0f, 12.0f);
@@ -1127,7 +1143,7 @@ int main(void)
     CHECK(power_status.state == POWER_STOPPED && !enabled_outputs);
     CHECK(request(1U, 12.0f)); stop(); period(24.0f, 0.0f, 0.0f);
     CHECK(power_status.state == POWER_STOPPED && !Power_IsStartPending() && !enabled_outputs);
-    puts("24V bench:1.0A reference/1.5A trip, reverse/ADC/timing, debugger and pending STOP preserved: PASS");
+    puts("24V bench:1.0A reference/6.0A sampled trip, reverse/ADC/timing, debugger and pending STOP preserved: PASS");
     late_input_init_failures();
     return EXIT_SUCCESS;
 }
