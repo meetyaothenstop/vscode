@@ -6,12 +6,23 @@ HEX为`MDK-ARM/bidreaction/bidreaction.hex`。保留正向Buck/Boost及反向Buc
 
 ## 当前版本
 
-2026-10-30：当前为**无插桩时序优化候选**，首页`MAIN ADC OPT 6A`、参数页`M-OPT`，
+2026-10-30：当前为**OPT2无插桩时序优化候选**，首页`MAIN ADC OPT2 6A`、参数页`M-OPT2`，
+同一主工程保持`POWER_UNIFIED_DIAGNOSTICS=0`。
+前一OPT实板读到64 T4：806周期、间隔1000、写入计数27680，超过相位期限800刻度。
+OPT2将Buck比较值映射内联，并消除未使用占空比字段保存；PI/采样/四模式/使能及保护条件保持。
+46组回归通过，主/台架ARM零错误零警告，实际HEX CCM/内联/无探针/DMA检查通过。
+当前主HEX SHA256：`D845A25DB8D14F24294885701FA8EED4EE5DF230A169D3FF4DE6DA3EC2BF93E8`。
+共享代码台架新指纹为`A9BA257BA3FFBB49C8FAED9803E3462671F692A9B4D063C9975512D09EF6D451`。
+OPT2尚未板测，不能声称T4已消除；操作与取数见[主工程OPT2测试](docs/主工程OPT2测试.md)。
+
+## OPT1历史（dd3e6ff）
+
+2026-10-30：当时为**无插桩时序优化候选**，首页`MAIN ADC OPT 6A`、参数页`M-OPT`，
 同一主工程显式设置`POWER_UNIFIED_DIAGNOSTICS=0`。
 依据首次控制步的分段记录，将固定保护限值移到启动发布前计算，并为主Buck增加固定模式PWM映射。
 PI、四模式、ADC相位、使能顺序、6A参考/7.5A停机与840/936时限保持。
 46组回归通过，主/台架ARM重建零错误零警告，实际HEX CCM/无探针/DMA检查通过。
-台架HEX指纹不变。当前主HEX SHA256：
+当时台架HEX指纹不变。该版主HEX SHA256：
 `FC0F63F5641465B0293D941270DA603C4E713D0C0E5CC0A7842D4719869FAD5F`。
 尚未验证本候选的实板耗时或T3消除；下载与取数见[主工程时序优化测试](docs/主工程时序优化测试.md)。
 

@@ -25,7 +25,9 @@ if ($execBase -ne 0x10000000 -or $maxSize -ne 0x8000 -or $codeSize -eq 0 -or
 $hotSymbols = @('HRTIM1_TIMB_IRQHandler','Power_TimerIRQ','enable_outputs',
     'forward_step','PWM_MakePlan','PWM_EntryIsTimely','PowerProtection_FaultPending')
 if ($MainApplication) {
-    $hotSymbols += 'PWM_MakeBuckPlan'
+    if ($mapText -match 'power_control\.o\(\.text\.Power_TimerIRQ\) refers to .*\(\.text\.PWM_MakeBuck(?:Plan|Compares)\)') {
+        throw 'Main control IRQ still calls an out-of-line Buck mapper'
+    }
     $hotSymbols += @('forward_main_buck_step','forward_main_full_step',
         'reverse_step','reverse_hold_step','reverse_prepare_resume')
 }

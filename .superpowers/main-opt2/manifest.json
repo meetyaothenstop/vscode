@@ -1,0 +1,23 @@
+{
+  "date":"2026-10-30",
+  "base":"dd3e6ff",
+  "branch":"codex/main-buck",
+  "project":"MDK-ARM/bidreaction.uvprojx",
+  "target":"bidreaction",
+  "diagnostic_probes":false,
+  "identity":["MAIN ADC OPT2 6A","M-OPT2"],
+  "previous_opt_board_fault":{"fault":64,"detail":4,"cycles":806,"spacing":1000,"counter":27680,"reference":0.10000001,"fault_left":24.0211468,"fault_right":0.0692929998,"fault_current":0.100805283},
+  "host_groups_passed":46,
+  "mapping_command_cases":200016,
+  "size":{"code":45588,"ro":1288,"rw":44,"zi":4500},
+  "ccm":{"bytes":7756,"run":"0x10000000","load":"0x080098D0"},
+  "hex_sha256":"D845A25DB8D14F24294885701FA8EED4EE5DF230A169D3FF4DE6DA3EC2BF93E8",
+  "axf_sha256":"C92E52CC6ECEBE549E1A57BD2E5098DC0B6D13CB8E9A8954CAD3350CC3284A0A",
+  "axf_export_matches_hex":true,
+  "buck_mapper_calls_from_irq":0,
+  "unused_buck_duty_stores_removed":true,
+  "bench":{"hex_sha256":"A9BA257BA3FFBB49C8FAED9803E3462671F692A9B4D063C9975512D09EF6D451","code":40420,"ro":1288,"rw":32,"zi":4264,"ccm_bytes":3376},
+  "board_actions":"existing Watch expression added/expanded/scrolled only; no connect/run/halt/reset/download",
+  "opt2_board_timing_verified":false,
+  "t4_eliminated":false
+}

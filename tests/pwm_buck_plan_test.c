@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 
-extern int PWM_MakeBuckPlan(float command, PwmPlan *out);
+extern int PWM_MakeBuckCompares(float command, uint32_t *left, uint32_t *right);
 
 static void compare(float command)
 {
@@ -18,6 +18,9 @@ static void compare(float command)
     assert(memcmp(&specialized.right_high, &generic.right_high, sizeof(float)) == 0);
     assert(specialized.left_compare == generic.left_compare);
     assert(specialized.right_compare == generic.right_compare);
+    uint32_t left = 123U, right = 456U;
+    assert(PWM_MakeBuckCompares(command, &left, &right) == expected);
+    assert(left == generic.left_compare && right == generic.right_compare);
 }
 
 int main(void)
@@ -37,6 +40,9 @@ int main(void)
         compare(value);
     }
     assert(!PWM_MakeBuckPlan(0.5f, NULL));
+    uint32_t unchanged = 777U;
+    assert(!PWM_MakeBuckCompares(0.5f, NULL, &unchanged) && unchanged == 777U);
+    assert(!PWM_MakeBuckCompares(0.5f, &unchanged, NULL) && unchanged == 777U);
     puts("Buck specialized/generic mapper: 200k+ commands, null/min-pulse/upper boundary, NaN/inf, unchanged invalid outputs: PASS");
     return 0;
 }

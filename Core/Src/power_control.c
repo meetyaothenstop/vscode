@@ -759,7 +759,7 @@ void Power_TimerIRQ(void)
         DIAG_STAGE(POWER_DIAG_STAGE_MAP);
         if (forward_errorStatus ||
 #if POWER_MAIN_APPLICATION
-            !(active_mode == 1U ? PWM_MakeBuckPlan(forward_Y.D_cmd, &plan) :
+            !(active_mode == 1U ? PWM_MakeBuckCompares(forward_Y.D_cmd, &plan.left_compare, &plan.right_compare) :
               PWM_MakePlan(forward_Y.D_cmd, forward_Y.BOOST_RUN, &plan))) {
 #else
             !PWM_MakePlan(forward_Y.D_cmd, forward_Y.BOOST_RUN, &plan)) {
@@ -785,7 +785,11 @@ void Power_TimerIRQ(void)
         /* Keep reference/filters alive without winding up PIs while off.
          * Refresh bootstrap before resuming the retained operating mode. */
         if (resuming) {
-            resume_plan = plan;
+            /* Only compare registers are consumed on resume. Do not retain
+             * unused duty fields: that makes them escape the inline mapper
+             * and forces intermediate stores on the normal Buck path too. */
+            resume_plan.left_compare = plan.left_compare;
+            resume_plan.right_compare = plan.right_compare;
             if (!begin_bootstrap(1U)) DIAG_IRQ_RETURN();
         }
     } else write_plan(&plan);
