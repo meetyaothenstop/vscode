@@ -78,7 +78,7 @@ extern COMP_TypeDef test_comp1, test_comp2;
 #define HRTIM1 (&test_hrtim1)
 #define RCC (&test_rcc)
 #define CoreDebug (&test_core_debug)
-#if defined(POWER_UNIFIED_DIAGNOSTICS) && POWER_UNIFIED_DIAGNOSTICS
+#if (defined(POWER_UNIFIED_DIAGNOSTICS) && POWER_UNIFIED_DIAGNOSTICS) || defined(POWER_TEST_TIMING)
 DWT_Type *test_dwt_access(void);
 #define DWT test_dwt_access()
 #else

@@ -1,5 +1,7 @@
 # 主工程OPT2：内联比较值映射候选 — 2026-10-30
 
+> 本文保留OPT2历史及792/27232截图。后续当前候选已改为W128，见[写入窗口测试](主工程写入窗口测试.md)。
+
 工程仍为`MDK-ARM/bidreaction.uvprojx`，Target `bidreaction`，
 固件`MDK-ARM/bidreaction/bidreaction.hex`。不新增工程。
 首页`MAIN ADC OPT2 6A`，参数页后缀`M-OPT2`，`POWER_UNIFIED_DIAGNOSTICS=0`。

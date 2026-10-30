@@ -153,7 +153,7 @@ void Menu_Render(const PowerMenu *menu, const MenuTelemetry *data, MenuFrame *fr
         put(frame, 0, 0, POWER_MAIN_APPLICATION ?
             (POWER_UNIFIED_DIAGNOSTICS ?
                 (POWER_MAIN_ADC_SOFTWARE_ONLY ? "MAIN ADC DIAG 6A" : "MAIN HW DIAG 6A") :
-                (POWER_MAIN_ADC_SOFTWARE_ONLY ? "MAIN ADC OPT2 6A" : "MAIN HW GUARD 6A")) :
+                (POWER_MAIN_ADC_SOFTWARE_ONLY ? "MAIN ADC W128 6A" : "MAIN HW GUARD 6A")) :
             POWER_BENCH_24V_BUCK_TEST ?
             (POWER_BENCH_LIVE_OLED ? "24V BUCK DMA OVP15 C6" : "24V FAST OVP15 C6") :
             POWER_BENCH_LIVE_OLED ? "12V BUCK DMA OVP8" :
@@ -173,7 +173,7 @@ void Menu_Render(const PowerMenu *menu, const MenuTelemetry *data, MenuFrame *fr
                        menu->direction == MENU_FORWARD ? "FORWARD" : "REVERSE",
                        mode == MENU_MODE_BUCK ? "BUCK" :
                        (mode == MENU_MODE_BOOST ? "BOOST" : "EQUAL"),
-                       POWER_MAIN_APPLICATION ? (POWER_UNIFIED_DIAGNOSTICS ? " M-DIAG" : " M-OPT2") :
+                       POWER_MAIN_APPLICATION ? (POWER_UNIFIED_DIAGNOSTICS ? " M-DIAG" : " M-W128") :
                        POWER_BENCH_24V_BUCK_TEST ? " SW15-C6" :
                        POWER_BENCH_LIVE_OLED ? " SW-DMA8" :
                        POWER_BENCH_LATE_INPUT_ADC ? " SW-A2-8" : POWER_BENCH_FAST_BUCK ? " SW-FAST" :

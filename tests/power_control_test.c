@@ -84,7 +84,32 @@ HAL_StatusTypeDef HAL_ADC_Start(ADC_HandleTypeDef *adc)
 }
 #endif
 
-#if defined(POWER_UNIFIED_DIAGNOSTICS) && POWER_UNIFIED_DIAGNOSTICS
+#if defined(POWER_TEST_TIMING)
+/* Register-only time/events for the uninstrumented real MAIN backend. The
+ * first access belongs to irq()'s period advance, then begin/prewrite/exit.
+ * No production timing hooks or controller substitutes are introduced. */
+static struct {
+    unsigned enabled, reads, pending;
+    uint32_t begin, write_elapsed, write_counter, exit_elapsed, exit_counter;
+} timing_event;
+DWT_Type *test_dwt_access(void)
+{
+    if (timing_event.enabled) {
+        unsigned read = timing_event.reads++;
+        if (read == 1U) timing_event.begin = test_dwt.CYCCNT;
+        else if (read == 2U) {
+            test_dwt.CYCCNT = timing_event.begin + timing_event.write_elapsed;
+            HRTIM1->sTimerxRegs[TIMER_B].CNTxR = timing_event.write_counter;
+        } else if (read == 3U) {
+            test_dwt.CYCCNT = timing_event.begin + timing_event.exit_elapsed;
+            HRTIM1->sTimerxRegs[TIMER_B].CNTxR = timing_event.exit_counter;
+            if (timing_event.pending)
+                HRTIM1->sTimerxRegs[TIMER_B].TIMxISR |= HRTIM_TIMISR_REP;
+        }
+    }
+    return &test_dwt;
+}
+#elif defined(POWER_UNIFIED_DIAGNOSTICS) && POWER_UNIFIED_DIAGNOSTICS
 /* Hardware-only double: advance the real backend's CYCCNT reads. A delayed
  * checkpoint models time spent in that section; controllers remain real. */
 static uint32_t profile_tick_per_read, profile_delay_stage, profile_delay_cycles;
@@ -1380,6 +1405,87 @@ static void main_first_control_profile(void)
 }
 #endif
 
+#if defined(POWER_TEST_TIMING)
+static void main_write_phase_budget(void)
+{
+    /* Literal boundary fixtures catch over-broad widening, lost T3/T5/T6,
+     * stale per-mode limits and writes performed after a rejected deadline. */
+    static const struct {
+        unsigned mode;
+        uint32_t elapsed, phase, exit_elapsed, exit_phase;
+        unsigned pending, detail;
+    } cases[] = {
+        {1U, 792U, 27232U, 850U, 29088U, 0U, 0U}, /* User screenshot point. */
+        {1U, 840U, 27904U, 877U, 29952U, 0U, 0U}, /* Both inclusive limits. */
+        {1U, 792U, 27905U, 850U, 29088U, 0U, 4U},
+        {1U, 841U, 27905U, 850U, 29088U, 0U, 3U}, /* T3 precedes T4. */
+        {1U, 792U, 27904U, 877U, 29953U, 0U, 5U}, /* Absolute exit late. */
+        {1U, 792U, 27904U, 937U, 29088U, 0U, 5U}, /* DWT exit late. */
+        {1U, 792U, 27232U, 850U, 29088U, 1U, 6U},
+        {2U, 792U, 27232U, 850U, 29088U, 0U, 4U},
+        {3U, 792U, 27232U, 850U, 29088U, 0U, 4U},
+        {4U, 792U, 27232U, 850U, 29088U, 0U, 4U},
+        {2U, 792U, 26880U, 850U, 29088U, 0U, 0U},
+        {2U, 792U, 26880U, 936U, 30592U, 0U, 0U}, /* Original inclusive DWT exit. */
+        {3U, 792U, 26880U, 850U, 29088U, 0U, 0U},
+        {4U, 792U, 26880U, 850U, 29088U, 0U, 0U},
+        {1U, 792U, 27232U, 850U, 29088U, 0U, 0U}, /* Return to Buck. */
+    };
+    for (unsigned n = 0U; n < sizeof(cases)/sizeof(cases[0]); ++n) {
+        unsigned mode = cases[n].mode;
+        float source = (mode == 2U || mode == 4U) ? 12.0f : 24.0f;
+        float target = (mode == 2U || mode == 4U) ? 36.0f : 12.0f;
+        float left = mode >= 3U ? 0.0f : source;
+        float right = mode >= 3U ? source : 0.0f;
+        if (n == 0U) {
+            stopped_samples(left, right, 0.0f);
+            CHECK(request(mode, target));
+            for (unsigned period_index = 0U; period_index < 32U; ++period_index)
+                period(left, right, 0.0f);
+            CHECK(power_status.state == POWER_ARMING);
+        } else start_running(mode, source, target);
+        /* Distinguish no write from rewriting the same near-zero command. */
+        HRTIM1->sTimerxRegs[TIMER_B].CMP1xR = 1234U;
+        HRTIM1->sTimerxRegs[TIMER_A].CMP1xR = 4321U;
+        timing_event.enabled = 1U;
+        timing_event.reads = 0U;
+        timing_event.pending = cases[n].pending;
+        timing_event.write_elapsed = cases[n].elapsed;
+        timing_event.write_counter = cases[n].phase;
+        timing_event.exit_elapsed = cases[n].exit_elapsed;
+        timing_event.exit_counter = cases[n].exit_phase;
+        irq(left, right, 0.0f, ADC_ISR_JEOS, 1000U, 640U);
+        timing_event.enabled = 0U;
+        if (cases[n].detail == 0U) {
+            CHECK(power_status.fault == 0U && power_status.state == POWER_RUNNING);
+            CHECK(enabled_outputs == ALL_OUTPUTS);
+            check_plan(mode);
+        } else {
+            expect_fault(POWER_FAULT_TIMING);
+            CHECK(power_status.fault_detail == cases[n].detail);
+            CHECK(power_status.fault_spacing_cycles == 1000U);
+            unsigned prewrite = cases[n].detail == 3U || cases[n].detail == 4U;
+            CHECK(power_status.fault_elapsed_cycles ==
+                  (prewrite ? cases[n].elapsed : cases[n].exit_elapsed));
+            CHECK(power_status.fault_counter_ticks ==
+                  (prewrite ? cases[n].phase : cases[n].exit_phase));
+            if (prewrite) {
+                CHECK(HRTIM1->sTimerxRegs[TIMER_B].CMP1xR == 1234U);
+                CHECK(HRTIM1->sTimerxRegs[TIMER_A].CMP1xR == 4321U);
+            } else check_plan(mode);
+            uint32_t saved_elapsed = power_status.fault_elapsed_cycles;
+            uint32_t saved_counter = power_status.fault_counter_ticks;
+            period(left, right, 0.0f);
+            CHECK(power_status.fault_detail == cases[n].detail);
+            CHECK(power_status.fault_elapsed_cycles == saved_elapsed);
+            CHECK(power_status.fault_counter_ticks == saved_counter);
+        }
+    }
+    stop();
+    puts("Main phase budget: captured point, exact write/exit limits, other modes, T3/T5/T6, no rejected writes and first-fault retention: PASS");
+}
+#endif
+
 int main(void)
 {
     ADC_HandleTypeDef adc = {.Instance = ADC1};
@@ -1393,6 +1499,9 @@ int main(void)
     main_mode_protection();
     main_adc_mode_selection();
     main_stop_and_clear_require_fresh_sample();
+#if defined(POWER_TEST_TIMING)
+    main_write_phase_budget();
+#endif
 #if POWER_UNIFIED_DIAGNOSTICS
     main_first_control_profile();
 #endif

@@ -47,6 +47,11 @@
 **/arm_compare/
 **/arm_diagnostic/
 
+# Rebuildable local write-window audit output
+/.superpowers/phase-budget/*.disasm
+/.superpowers/phase-budget/*.log
+/tests/phase_budget_*.log
+
 # Do not accidentally commit credentials or local environment files
 .env
 .env.*

@@ -37,6 +37,7 @@ static struct {
     float INPUT_MIN_VOLTS, INPUT_MAX_VOLTS;
     float START_CURRENT_LIMIT_AMPS, START_OUTPUT_MAX_VOLTS;
     float output_trip_volts;
+    uint32_t write_phase_limit_ticks, exit_phase_limit_ticks;
 } active_limits;
 #define IRQ_LIMIT(name) active_limits.name
 #else
@@ -476,6 +477,12 @@ int Power_RequestStart(unsigned mode, float target_volts)
     active_limits.START_CURRENT_LIMIT_AMPS = MODE_LIMIT(mode, START_CURRENT_LIMIT_AMPS);
     active_limits.START_OUTPUT_MAX_VOLTS = MODE_LIMIT(mode, START_OUTPUT_MAX_VOLTS);
     active_limits.output_trip_volts = target_volts * MODE_LIMIT(mode, OUTPUT_OVERVOLTAGE_RATIO);
+    /* Forward Buck candidate: reserve128 CPU clocks before the common
+     * update, then require the postwrite checkpoint to leave64 clocks.
+     * Other modes keep the160-clock write window and no new phase limit.
+     * DWT840/936 and pending-REP checks remain independent safeguards. */
+    active_limits.write_phase_limit_ticks = PWM_PERIOD_TICKS - (mode == 1U ? 4096U : 5120U);
+    active_limits.exit_phase_limit_ticks = mode == 1U ? PWM_PERIOD_TICKS - 2048U : PWM_PERIOD_TICKS;
 #endif
     if (reverse) {
         reverse_configure(boost ? vin : 0.1f, target_volts, POWER_CURRENT_REFERENCE_LIMIT);
@@ -775,7 +782,13 @@ void Power_TimerIRQ(void)
     /* Do not write either preload close to the common update boundary. */
     uint32_t before_write = DWT->CYCCNT - begin;
     uint32_t write_counter = HRTIM1->sTimerxRegs[TIMER_B].CNTxR;
-    if (before_write > cycle_budget - 160U || write_counter > PWM_PERIOD_TICKS - 5120U) {
+    if (before_write > cycle_budget - 160U || write_counter >
+#if POWER_MAIN_APPLICATION
+        active_limits.write_phase_limit_ticks
+#else
+        PWM_PERIOD_TICKS - 5120U
+#endif
+       ) {
         timing_trip(before_write > cycle_budget - 160U ? 3U : 4U,
                     before_write, spacing, write_counter);
         DIAG_IRQ_RETURN();
@@ -797,8 +810,14 @@ void Power_TimerIRQ(void)
     DIAG_STAGE(POWER_DIAG_STAGE_EXIT);
     uint32_t elapsed = DWT->CYCCNT - begin;
     if (elapsed > power_status.isr_cycles_max) power_status.isr_cycles_max = elapsed;
+#if POWER_MAIN_APPLICATION
+    uint32_t exit_counter = HRTIM1->sTimerxRegs[TIMER_B].CNTxR;
+    if (elapsed > cycle_budget - 64U || exit_counter > active_limits.exit_phase_limit_ticks)
+        timing_trip(5U, elapsed, spacing, exit_counter);
+#else
     if (elapsed > cycle_budget - 64U)
         timing_trip(5U, elapsed, spacing, HRTIM1->sTimerxRegs[TIMER_B].CNTxR);
+#endif
     else if (HRTIM1->sTimerxRegs[TIMER_B].TIMxISR & HRTIM_TIMISR_REP)
         timing_trip(6U, elapsed, spacing, HRTIM1->sTimerxRegs[TIMER_B].CNTxR);
 #if POWER_UNIFIED_DIAGNOSTICS
