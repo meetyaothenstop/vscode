@@ -32,8 +32,8 @@
 #ifndef POWER_UNIFIED_DIAGNOSTICS
 #define POWER_UNIFIED_DIAGNOSTICS 0U
 #endif
-#if POWER_UNIFIED_DIAGNOSTICS && (!POWER_BENCH_12V_BUCK_TEST || !POWER_TEST_SKIP_OLED_ACTIVE)
-#error Unified diagnostics requires restricted 12 V bench and OLED mute.
+#if POWER_UNIFIED_DIAGNOSTICS && !POWER_MAIN_APPLICATION && (!POWER_BENCH_12V_BUCK_TEST || !POWER_TEST_SKIP_OLED_ACTIVE)
+#error Unified diagnostics requires main application or restricted bench with OLED mute.
 #endif
 
 /* Placement experiment only. The linked CCM region is verified separately;

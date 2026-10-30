@@ -1,5 +1,8 @@
 # bidreaction主工程：Buck12–40V/0–36V/6A参考
 
+2026-10-30当前工程临时启用分段计时诊断，当前下载身份、HEX指纹和取数步骤见
+[主工程T3诊断](主工程T3诊断.md)。下文是非插桩主工程基线，不能把两版指纹混用。
+
 工程`MDK-ARM/bidreaction.uvprojx`，Target`bidreaction`，
 固件`MDK-ARM/bidreaction/bidreaction.hex`。用户自行下载，本任务无板上操作。
 不新增工程；原bench12_buck_fast仅保留为受限参考，Boost及反向模式继续存在。

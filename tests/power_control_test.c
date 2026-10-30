@@ -12,6 +12,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define CHECK(expression) do { if (!(expression)) { \
     fprintf(stderr, "%s:%d: %s (state=%u, fault=0x%lx, outputs=0x%lx)\n", \
@@ -1345,6 +1346,40 @@ static void main_stop_and_clear_require_fresh_sample(void)
     puts("Main STOP/clear: never qualify forward Buck from the preceding ADC1-only mode/fault sample: PASS");
 }
 
+#if POWER_UNIFIED_DIAGNOSTICS
+static void main_first_control_profile(void)
+{
+    stopped_samples(24.0f, 0.0f, 0.0f);
+    CHECK(request(1U, 12.0f));
+    for (unsigned n = 0U; n < 32U; ++n) period(24.0f, 0.0f, 0.0f);
+    CHECK(power_status.state == POWER_ARMING);
+    profile_delay_stage = POWER_DIAG_STAGE_CONTROLLER;
+    profile_delay_cycles = 900U;
+    period(24.0f, 0.0f, 0.0f);
+    expect_fault(POWER_FAULT_TIMING);
+    CHECK(!enabled_outputs && power_status.fault_detail == 3U);
+    CHECK(power_diag.fault.mode == 1U && power_diag.fault.target_volts == 12.0f);
+    CHECK(power_diag.fault.profile.entry_state == POWER_ARMING);
+    CHECK(power_diag.fault.state == POWER_RUNNING);
+    CHECK(power_diag.fault.profile.stage == POWER_DIAG_STAGE_PREWRITE);
+    CHECK(power_diag.fault.profile.valid_mask == 63U);
+    CHECK(power_diag.fault.profile.checkpoint_cycles[POWER_DIAG_CP_CONTROLLER] == 900U);
+    CHECK(power_diag.fault.profile.checkpoint_cycles[POWER_DIAG_CP_MAP] == 900U);
+    CHECK(power_diag.fault.profile.checkpoint_cycles[POWER_DIAG_CP_WRITE] == 0U);
+    CHECK(power_diag.fault.timing_elapsed_cycles == 900U);
+    CHECK(power_diag.fault.timing_spacing_cycles == 1000U);
+    CHECK(power_diag.fault.sample_fresh == 1U);
+    CHECK(power_status.v_reference > 0.099f && power_status.v_reference < 0.101f);
+    unsigned char saved_record[sizeof(power_diag.fault)];
+    memcpy(saved_record, (const void *)&power_diag.fault, sizeof(saved_record));
+    period(25.0f, 0.2f, 0.0f);
+    CHECK(memcmp(saved_record, (const void *)&power_diag.fault, sizeof(saved_record)) == 0);
+    clear_fault();
+    CHECK(power_diag.fault.profile.valid_mask == 0U && power_diag.fault.fault == 0U);
+    puts("Main first-control T3: ARMING entry, partial checkpoints, gates OFF, coherent immutable fault and clear: PASS");
+}
+#endif
+
 int main(void)
 {
     ADC_HandleTypeDef adc = {.Instance = ADC1};
@@ -1358,6 +1393,9 @@ int main(void)
     main_mode_protection();
     main_adc_mode_selection();
     main_stop_and_clear_require_fresh_sample();
+#if POWER_UNIFIED_DIAGNOSTICS
+    main_first_control_profile();
+#endif
     hardware_enable_interleavings();
     adc_and_timing_faults();
     late_input_init_failures();

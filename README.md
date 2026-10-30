@@ -6,6 +6,17 @@ HEX为`MDK-ARM/bidreaction/bidreaction.hex`。保留正向Buck/Boost及反向Buc
 
 ## 当前版本
 
+2026-10-30：用户在24→12V启动时立即遇到64 T3，非插桩实测858周期、
+计数器29344，参考约0.1V。当前同一主工程启用`POWER_UNIFIED_DIAGNOSTICS=1`，
+交付的是**分段计时诊断候选**，用于定位首控制步热点，尚未修复或验证消除T3。
+首页`MAIN ADC DIAG 6A`，参数页`M-DIAG`。PI/四模式/6A参考/7.5A停机及840/936时限保持。
+45组回归通过，ARM重建零错误零警告，实际HEX CCM/DMA检查通过。
+当前HEX SHA256：`E6F5E9E4364F70DC0FAE56BAEE760A908F9E61051E3E81BFB8392F48F6D2CC17`。
+助手没有板上操作；取数步骤见[主工程T3诊断](docs/主工程T3诊断.md)。
+诊断探针改变耗时，不能用其总耗时直接比较下面的非插桩版本。
+
+## 非插桩主工程基线（4bb0c4f）
+
 - 主配置`POWER_MAIN_APPLICATION=1`、`POWER_MAIN_ADC_SOFTWARE_ONLY=1`，台架标志全为0。
   用户明确选择ADC软件保护测试；硬件OCP接线/就绪不伪造，当前未确认硬件保护。
 - Buck菜单输入12–40V、输出0–36V，保持1V步进，默认正向24→12V、反向36→12V。

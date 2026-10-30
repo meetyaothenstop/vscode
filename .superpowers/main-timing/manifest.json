@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-30",
+  "base": "4bb0c4f",
+  "project": "MDK-ARM/bidreaction.uvprojx",
+  "target": "bidreaction",
+  "diagnostic_probes": true,
+  "identity": ["MAIN ADC DIAG 6A", "M-DIAG"],
+  "native_board_evidence": {"fault":64,"detail":3,"cycles":858,"spacing":1000,"counter":29344,"reference":0.10000001,"source":"user screenshot"},
+  "host_test_groups_passed":45,
+  "size":{"code":44960,"ro":1288,"rw":48,"zi":4696},
+  "ccm":{"bytes":7392,"run":"0x10000000","load":"0x080097C8"},
+  "hex_sha256":"E6F5E9E4364F70DC0FAE56BAEE760A908F9E61051E3E81BFB8392F48F6D2CC17",
+  "axf_sha256":"86FED419A16097338F07B7DD962D822D0AB7CE37AF3EE1162C737C2A9FC4CA43",
+  "board_actions":"none; user downloads",
+  "t3_fixed_or_board_timing_verified":false
+}
