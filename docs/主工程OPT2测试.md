@@ -4,6 +4,10 @@
 固件`MDK-ARM/bidreaction/bidreaction.hex`。不新增工程。
 首页`MAIN ADC OPT2 6A`，参数页后缀`M-OPT2`，`POWER_UNIFIED_DIAGNOSTICS=0`。
 
+最新用户反馈：OPT2交付后仍报64 T4，但尚未取得这一次的新故障字段，也未独立核验运行时指纹。
+下表806周期/27680刻度属于前一OPT版，不能当作OPT2数据。完整接续见
+[对话接续摘要](对话接续摘要-2026-10-30.md)。
+
 ## 本次故障依据
 
 用户下载前一OPT版后报告64 T4。助手只在既有调试会话添加/展开`power_status`并滚动，
