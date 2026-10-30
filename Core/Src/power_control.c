@@ -31,8 +31,17 @@ static volatile unsigned early_sample_valid;
 static volatile float early_input_volts;
 #define MODE_LIMIT(mode, name) (((mode) == 1U || (mode) == 3U) ? \
     POWER_MAIN_BUCK_##name : POWER_##name)
+/* Fixed for an accepted request. Publish with active_mode/target before
+ * start_pending, rather than choosing Buck/Boost constants in every IRQ. */
+static struct {
+    float INPUT_MIN_VOLTS, INPUT_MAX_VOLTS;
+    float START_CURRENT_LIMIT_AMPS, START_OUTPUT_MAX_VOLTS;
+    float output_trip_volts;
+} active_limits;
+#define IRQ_LIMIT(name) active_limits.name
 #else
 #define MODE_LIMIT(mode, name) POWER_##name
+#define IRQ_LIMIT(name) POWER_##name
 #endif
 
 #if POWER_LATE_INPUT_ADC
@@ -461,6 +470,13 @@ int Power_RequestStart(unsigned mode, float target_volts)
     }
     active_mode = mode;
     active_target = target_volts;
+#if POWER_MAIN_APPLICATION
+    active_limits.INPUT_MIN_VOLTS = MODE_LIMIT(mode, INPUT_MIN_VOLTS);
+    active_limits.INPUT_MAX_VOLTS = MODE_LIMIT(mode, INPUT_MAX_VOLTS);
+    active_limits.START_CURRENT_LIMIT_AMPS = MODE_LIMIT(mode, START_CURRENT_LIMIT_AMPS);
+    active_limits.START_OUTPUT_MAX_VOLTS = MODE_LIMIT(mode, START_OUTPUT_MAX_VOLTS);
+    active_limits.output_trip_volts = target_volts * MODE_LIMIT(mode, OUTPUT_OVERVOLTAGE_RATIO);
+#endif
     if (reverse) {
         reverse_configure(boost ? vin : 0.1f, target_volts, POWER_CURRENT_REFERENCE_LIMIT);
         reverse_initialize(0.0f);
@@ -626,14 +642,18 @@ void Power_TimerIRQ(void)
     int reverse = active_mode >= 3U;
     float vin = reverse ? power_status.v_right : power_status.v_left;
     float vout = reverse ? power_status.v_left : power_status.v_right;
-    if (!(vin >= MODE_LIMIT(active_mode, INPUT_MIN_VOLTS) &&
-          vin <= MODE_LIMIT(active_mode, INPUT_MAX_VOLTS)))
+    if (!(vin >= IRQ_LIMIT(INPUT_MIN_VOLTS) &&
+          vin <= IRQ_LIMIT(INPUT_MAX_VOLTS)))
         trip(POWER_FAULT_INPUT);
 #if POWER_MAIN_APPLICATION
     if (active_mode == 1U && active_target > vin * POWER_MAIN_BUCK_MAX_DUTY)
         trip(POWER_FAULT_INPUT);
 #endif
-    if (vout > active_target * MODE_LIMIT(active_mode, OUTPUT_OVERVOLTAGE_RATIO))
+#if POWER_MAIN_APPLICATION
+    if (vout > active_limits.output_trip_volts)
+#else
+    if (vout > active_target * POWER_OUTPUT_OVERVOLTAGE_RATIO)
+#endif
         trip(POWER_FAULT_OUTPUT);
     if (fabsf(power_status.il) >= POWER_CURRENT_TRIP_AMPS || power_status.raw_il >= 4090U ||
         power_status.raw_il <= 5U) trip(POWER_FAULT_CURRENT);
@@ -649,10 +669,10 @@ void Power_TimerIRQ(void)
      * HOLD resume deliberately has charged output and is excluded. */
     if ((starting || (!bootstrap_resume &&
          (power_status.state == POWER_BOOTSTRAP || power_status.state == POWER_ARMING))) &&
-        (!(fabsf(power_status.il) < MODE_LIMIT(active_mode, START_CURRENT_LIMIT_AMPS)) ||
-         vout > MODE_LIMIT(active_mode, START_OUTPUT_MAX_VOLTS)))
+        (!(fabsf(power_status.il) < IRQ_LIMIT(START_CURRENT_LIMIT_AMPS)) ||
+         vout > IRQ_LIMIT(START_OUTPUT_MAX_VOLTS)))
         trip_detail(POWER_FAULT_START,
-                    !(fabsf(power_status.il) < MODE_LIMIT(active_mode, START_CURRENT_LIMIT_AMPS)) ? 8U : 9U);
+                    !(fabsf(power_status.il) < IRQ_LIMIT(START_CURRENT_LIMIT_AMPS)) ? 8U : 9U);
     if (power_status.state == POWER_FAULT) DIAG_IRQ_RETURN();
     DIAG_CHECKPOINT(POWER_DIAG_CP_CHECKS);
     DIAG_STAGE(POWER_DIAG_STAGE_STATE);
@@ -737,8 +757,13 @@ void Power_TimerIRQ(void)
         forward_step();
         DIAG_CHECKPOINT(POWER_DIAG_CP_CONTROLLER);
         DIAG_STAGE(POWER_DIAG_STAGE_MAP);
-        if (forward_errorStatus || !PWM_MakePlan(forward_Y.D_cmd,
-                                                forward_Y.BOOST_RUN, &plan)) {
+        if (forward_errorStatus ||
+#if POWER_MAIN_APPLICATION
+            !(active_mode == 1U ? PWM_MakeBuckPlan(forward_Y.D_cmd, &plan) :
+              PWM_MakePlan(forward_Y.D_cmd, forward_Y.BOOST_RUN, &plan))) {
+#else
+            !PWM_MakePlan(forward_Y.D_cmd, forward_Y.BOOST_RUN, &plan)) {
+#endif
             trip(POWER_FAULT_CONTROLLER);
             DIAG_IRQ_RETURN();
         }

@@ -11,7 +11,7 @@ static float pulse_limit(float duty)
     return duty < 0.04f ? 0.04f : duty;
 }
 
-int PWM_MakePlan(float command, int boost_run, PwmPlan *out)
+static inline __attribute__((always_inline)) int make_forward_plan(float command, int boost_run, PwmPlan *out)
 {
     /* This comparison also rejects NaN. */
     if (!(command >= 0.0f && command <= 0.95f) || out == 0) return 0;
@@ -35,6 +35,16 @@ int PWM_MakePlan(float command, int boost_run, PwmPlan *out)
     out->right_compare = (uint32_t)(out->right_high * PWM_PERIOD_TICKS + 0.5f) +
                          PWM_DEADTIME_TICKS;
     return 1;
+}
+
+int PWM_MakePlan(float command, int boost_run, PwmPlan *out)
+{
+    return make_forward_plan(command, boost_run, out);
+}
+
+int PWM_MakeBuckPlan(float command, PwmPlan *out)
+{
+    return make_forward_plan(command, 0, out);
 }
 
 int PWM_MakeReversePlan(float command, int boost_run, PwmPlan *out)

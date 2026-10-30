@@ -76,20 +76,20 @@ static void test_identity_and_full_width_headers(void)
     assert(strstr(frame.rows[0], POWER_MAIN_ADC_SOFTWARE_ONLY ?
                   "MAIN ADC DIAG 6A" : "MAIN HW DIAG 6A"));
 #elif POWER_MAIN_ADC_SOFTWARE_ONLY
-    assert(strstr(frame.rows[0], "MAIN ADC SW 6A"));
+    assert(strstr(frame.rows[0], "MAIN ADC OPT 6A"));
 #else
     assert(strstr(frame.rows[0], "MAIN HW GUARD 6A"));
 #endif
     press(&menu, MENU_KEY_OK);
     Menu_Render(&menu, &data, &frame);
-    assert(strstr(frame.rows[0], POWER_UNIFIED_DIAGNOSTICS ? "FORWARD BUCK M-DIAG" : "FORWARD BUCK SW-MAIN"));
+    assert(strstr(frame.rows[0], POWER_UNIFIED_DIAGNOSTICS ? "FORWARD BUCK M-DIAG" : "FORWARD BUCK M-OPT"));
     menu.settings[MENU_FORWARD] = (MenuSettings){12U, 36U};
     Menu_Render(&menu, &data, &frame);
-    assert(strstr(frame.rows[0], POWER_UNIFIED_DIAGNOSTICS ? "FORWARD BOOST M-DIAG" : "FORWARD BOOST SW-MAIN"));
+    assert(strstr(frame.rows[0], POWER_UNIFIED_DIAGNOSTICS ? "FORWARD BOOST M-DIAG" : "FORWARD BOOST M-OPT"));
     menu.direction = MENU_REVERSE;
     menu.settings[MENU_REVERSE] = (MenuSettings){36U, 36U};
     Menu_Render(&menu, &data, &frame);
-    assert(strstr(frame.rows[0], POWER_UNIFIED_DIAGNOSTICS ? "REVERSE EQUAL M-DIAG" : "REVERSE EQUAL SW-MAIN"));
+    assert(strstr(frame.rows[0], POWER_UNIFIED_DIAGNOSTICS ? "REVERSE EQUAL M-DIAG" : "REVERSE EQUAL M-OPT"));
     for (unsigned row = 0; row < MENU_ROWS; ++row)
         assert(strlen(frame.rows[row]) == MENU_COLUMNS);
 }

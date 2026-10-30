@@ -338,7 +338,7 @@
             <v6Rtti>0</v6Rtti>
             <VariousControls>
               <MiscControls></MiscControls>
-              <Define>USE_HAL_DRIVER,STM32G474xx,POWER_MAIN_APPLICATION=1,POWER_MAIN_ADC_SOFTWARE_ONLY=1,POWER_CCM_CONTROL=1,POWER_UNIFIED_DIAGNOSTICS=1</Define>
+              <Define>USE_HAL_DRIVER,STM32G474xx,POWER_MAIN_APPLICATION=1,POWER_MAIN_ADC_SOFTWARE_ONLY=1,POWER_CCM_CONTROL=1,POWER_UNIFIED_DIAGNOSTICS=0</Define>
               <Undefine></Undefine>
               <IncludePath>../Core/Inc;../Drivers/STM32G4xx_HAL_Driver/Inc;../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32G4xx/Include;../Drivers/CMSIS/Include</IncludePath>
             </VariousControls>

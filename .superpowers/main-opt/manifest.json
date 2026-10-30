@@ -1,0 +1,22 @@
+{
+  "date":"2026-10-30",
+  "base":"8dc59c7",
+  "branch":"codex/main-buck",
+  "project":"MDK-ARM/bidreaction.uvprojx",
+  "target":"bidreaction",
+  "profile":{"POWER_MAIN_APPLICATION":1,"POWER_MAIN_ADC_SOFTWARE_ONLY":1,"POWER_CCM_CONTROL":1,"POWER_UNIFIED_DIAGNOSTICS":0},
+  "identity":["MAIN ADC OPT 6A","M-OPT"],
+  "diagnostic_board_evidence":{"fault":64,"detail":3,"mode":1,"target":12,"entry_state":2,"state":3,"mask":63,"checkpoints":[145,249,416,533,808,938,0],"last_checkpoint_valid":false,"timing_cycles":952,"spacing":1000,"entry_counter":4800,"write_counter":352,"capture_cycles":1147},
+  "host_groups_passed":46,
+  "mapper_equivalence_cases":200016,
+  "size":{"code":45608,"ro":1288,"rw":44,"zi":4500},
+  "ccm":{"bytes":7776,"run":"0x10000000","load":"0x080098D0"},
+  "hex_sha256":"FC0F63F5641465B0293D941270DA603C4E713D0C0E5CC0A7842D4719869FAD5F",
+  "axf_sha256":"6DED4A6BA0CD984E86A6C42D0A19D8807127558780F22E43833270B67FCED725",
+  "axf_export_matches_hex":true,
+  "static_bytes":{"buck_mapper":148,"generic_mapper":232,"irq":2724,"old_native_irq":2808},
+  "bench_hex_sha256":"7D9ADE7EC0931D15CEA20725440093E05D75BE36B98B11FE4B0A2B6FB23C0056",
+  "board_actions":"existing Watch expanded/scrolled only; no connect/run/halt/reset/download",
+  "optimized_board_timing_verified":false,
+  "t3_eliminated":false
+}

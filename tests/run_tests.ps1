@@ -12,6 +12,7 @@ try {
     $mainFlags = @('-DPOWER_MAIN_APPLICATION=1','-DPOWER_MAIN_ADC_SOFTWARE_ONLY=1')
     $mainDiagFlags = $mainFlags + @('-DPOWER_UNIFIED_DIAGNOSTICS=1')
     $cases = @(
+        @{Name='main_buck_plan_test'; Sources=@('tests/pwm_buck_plan_test.c','Core/Src/pwm_plan.c'); Flags=$mainFlags}
         @{Name='main_diag_power_test'; Sources=@('tests/power_control_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($mainDiagFlags + @('-Itests/power_hal','-Wno-unused-function'))}
         @{Name='main_diag_menu_test'; Sources=@('tests/main_menu_test.c','Core/Src/power_menu.c'); Flags=$mainDiagFlags}
         @{Name='main_forward_test'; Sources=@('tests/main_forward_test.c','Core/Src/forward.c',$referenceObject); Flags=$mainFlags}

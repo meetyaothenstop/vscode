@@ -28,4 +28,6 @@ int PWM_MakePlan(float command, int boost_run, PwmPlan *out);
 int PWM_MakeReversePlan(float command, int boost_run, PwmPlan *out);
 /* 1000 CPU cycles per period at 150 MHz; tolerate normal entry jitter. */
 int PWM_EntryIsTimely(uint32_t elapsed_cycles, uint32_t counter_ticks);
+/* Same forward mapper with boost_run fixed to zero; null-duty policy is unchanged. */
+int PWM_MakeBuckPlan(float command, PwmPlan *out);
 #endif
