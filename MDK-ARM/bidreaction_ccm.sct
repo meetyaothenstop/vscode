@@ -1,0 +1,25 @@
+; Main STM32G474CB: control in CCM; data, stack and DMA in ordinary SRAM.
+LR_IROM1 0x08000000 0x00020000 {
+  ER_IROM1 0x08000000 0x00020000 {
+    *.o (RESET, +First)
+    *(InRoot$$Sections)
+    .ANY (+RO)
+    .ANY (+XO)
+  }
+  ER_CCMRAM 0x10000000 0x00008000 {
+    stm32g4xx_it.o (.text.HRTIM1_TIMB_IRQHandler)
+    power_control.o (.text.Power_TimerIRQ)
+    power_control.o (.text.enable_outputs)
+    forward.o (.text.forward_step)
+    forward.o (.text.forward_main_buck_step)
+    forward.o (.text.forward_main_full_step)
+    reverse.o (.text.reverse_step)
+    reverse.o (.text.reverse_hold_step)
+    reverse.o (.text.reverse_prepare_resume)
+    pwm_plan.o (+RO)
+    power_protection.o (.text.PowerProtection_FaultPending)
+  }
+  RW_IRAM1 0x20000000 0x00018000 {
+    .ANY (+RW +ZI)
+  }
+}

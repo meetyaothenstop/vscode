@@ -17,7 +17,7 @@ int PWM_MakePlan(float command, int boost_run, PwmPlan *out)
     if (!(command >= 0.0f && command <= 0.95f) || out == 0) return 0;
     out->left_high = pulse_limit(boost_run ? PWM_REFRESH_HIGH :
                                 PWM_REFRESH_HIGH * command);
-#if POWER_BENCH_12V_BUCK_TEST
+#if POWER_FORWARD_NULL_DUTY
     /* Match the existing reverse Buck null-duty policy: a cold output
      * must not receive forced minimum energy when the PI requests less.
      * CMP1=0 is the HRTIMv2 continuous PER-set/CMP-reset zero-duty case. */
@@ -29,7 +29,7 @@ int PWM_MakePlan(float command, int boost_run, PwmPlan *out)
                                  PWM_REFRESH_HIGH);
     out->left_compare = (uint32_t)(out->left_high * PWM_PERIOD_TICKS + 0.5f) +
                         PWM_DEADTIME_TICKS;
-#if POWER_BENCH_12V_BUCK_TEST
+#if POWER_FORWARD_NULL_DUTY
     if (out->left_high == 0.0f) out->left_compare = 0U;
 #endif
     out->right_compare = (uint32_t)(out->right_high * PWM_PERIOD_TICKS + 0.5f) +

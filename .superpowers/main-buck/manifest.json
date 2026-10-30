@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-29",
+  "reverified_on": "2026-10-30",
+  "base": "c59df1c",
+  "branch": "codex/main-buck",
+  "project": "MDK-ARM/bidreaction.uvprojx",
+  "target": "bidreaction",
+  "profile": {"POWER_MAIN_APPLICATION": 1, "POWER_MAIN_ADC_SOFTWARE_ONLY": 1, "POWER_CCM_CONTROL": 1, "bench_flags": 0},
+  "user_confirmed": {"keep_boost_and_reverse": true, "adc_software_protection_test": true, "user_downloads": true},
+  "buck": {"input_menu_volts": [12,40], "output_menu_volts": [0,36], "menu_step_volts": 1, "positive_backend_target_volts": [1,36], "input_protection_volts": [10,42], "output_trip_ratio": 1.25, "current_reference_limit_amps": 6, "sampled_current_trip_amps": 7.5, "zero": "ALL-OFF, passive discharge, fault preserved", "forward_max_ratio": 0.95},
+  "modes": ["forward Buck", "forward Boost", "reverse Buck", "reverse Boost"],
+  "identity": ["MAIN ADC SW 6A", "SW-MAIN"],
+  "hex_sha256": "C21781791837435A881C1C96CB96A9982E10094D842736E7459EFF39D50A7749",
+  "axf_sha256": "BDB1D4DA1B74802A1B9D0C461C11828FCA22C7193316789F6B725FBA8767DB76",
+  "axf_export_matches_hex": true,
+  "size": {"code": 45500, "ro": 1288, "rw": 44, "zi": 4476},
+  "ccm": {"bytes": 7712, "run": "0x10000000", "load": "0x080098A4", "all_mode_symbols_verified": true},
+  "host_test_groups_passed": 43,
+  "reference_samples": {"main_buck": 540000, "main_boost": 120000},
+  "bench_rebuild": {"errors": 0, "warnings": 0, "hex_sha256": "7D9ADE7EC0931D15CEA20725440093E05D75BE36B98B11FE4B0A2B6FB23C0056", "ccm_bytes": 3380},
+  "board_actions": "none; no connect/download/reset/start",
+  "board_electrical_timing_verified": false
+}

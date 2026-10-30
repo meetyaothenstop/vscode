@@ -1,6 +1,17 @@
 #ifndef POWER_BUILD_CONFIG_H
 #define POWER_BUILD_CONFIG_H
 
+/* Main application policy is independent of all restricted bench identities. */
+#ifndef POWER_MAIN_APPLICATION
+#define POWER_MAIN_APPLICATION 0U
+#endif
+#ifndef POWER_MAIN_ADC_SOFTWARE_ONLY
+#define POWER_MAIN_ADC_SOFTWARE_ONLY 0U
+#endif
+#if POWER_MAIN_ADC_SOFTWARE_ONLY && !POWER_MAIN_APPLICATION
+#error Main ADC-only policy requires the main application profile.
+#endif
+
 /* Explicit opt-in for the separate 12 V ADC-only bench image.
  * This does not assert hardware OCP readiness or validate board wiring. */
 #ifndef POWER_BENCH_12V_BUCK_TEST
@@ -28,9 +39,9 @@
 /* Placement experiment only. The linked CCM region is verified separately;
  * enabling this identity must not enable unrestricted power operation. */
 #ifndef POWER_CCM_CONTROL
-#define POWER_CCM_CONTROL 0U
+#define POWER_CCM_CONTROL POWER_MAIN_APPLICATION
 #endif
-#if POWER_CCM_CONTROL && (!POWER_BENCH_12V_BUCK_TEST || !POWER_TEST_SKIP_OLED_ACTIVE)
+#if POWER_CCM_CONTROL && !POWER_MAIN_APPLICATION && (!POWER_BENCH_12V_BUCK_TEST || !POWER_TEST_SKIP_OLED_ACTIVE)
 #error CCM timing comparison requires restricted 12 V bench and OLED mute.
 #endif
 
@@ -59,6 +70,9 @@
 #if POWER_BENCH_24V_BUCK_TEST && !POWER_BENCH_FAST_BUCK
 #error The 24 V bench requires the restricted FAST Buck profile.
 #endif
+#if POWER_MAIN_APPLICATION && (POWER_BENCH_12V_BUCK_TEST || POWER_BENCH_FAST_BUCK || POWER_BENCH_24V_BUCK_TEST)
+#error Main and restricted bench profiles are mutually exclusive.
+#endif
 
 /* Phase-only bench experiment: ADC2 reads the same PA0 input later, while
  * ADC1 current/output sampling stays at the original injected trigger. */
@@ -69,6 +83,25 @@
 #error Late input sampling is restricted to the FAST Buck bench.
 #endif
 #define POWER_INPUT_ADC_PHASE_TICKS 23040U /* 4.8 us of the 6.667 us PWM period */
+
+/* Implementation capabilities, separate from restricted bench range/policy. */
+#define POWER_OLED_DMA (POWER_MAIN_APPLICATION || POWER_BENCH_LIVE_OLED)
+#define POWER_LATE_INPUT_ADC (POWER_MAIN_APPLICATION || POWER_BENCH_LATE_INPUT_ADC)
+#define POWER_FORWARD_NULL_DUTY (POWER_MAIN_APPLICATION || POWER_BENCH_12V_BUCK_TEST)
+
+/* Main Buck nominal menu range12..40V; fresh input protection has endpoint
+ * margin, without extending the claimed nominal operating range. */
+#define POWER_MAIN_INPUT_SETTING_MIN           12U
+#define POWER_MAIN_INPUT_SETTING_MAX           40U
+#define POWER_MAIN_OUTPUT_SETTING_MIN           0U
+#define POWER_MAIN_OUTPUT_SETTING_MAX          36U
+#define POWER_MAIN_BUCK_INPUT_MIN_VOLTS        10.0f
+#define POWER_MAIN_BUCK_INPUT_MAX_VOLTS        42.0f
+#define POWER_MAIN_BUCK_MAX_TARGET_VOLTS       36.0f
+#define POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_RATIO 1.25f
+#define POWER_MAIN_BUCK_START_CURRENT_LIMIT_AMPS 0.5f
+#define POWER_MAIN_BUCK_START_OUTPUT_MAX_VOLTS   1.0f
+#define POWER_MAIN_BUCK_MAX_DUTY                 0.95f
 
 /* User-selected cold-start acceptance for the new bench image only.
  * Current is strictly below the limit; output voltage may equal its limit.
@@ -127,8 +160,13 @@
 #define POWER_INPUT_MIN_VOLTS               6.0f
 #define POWER_INPUT_MAX_VOLTS              40.0f
 #define POWER_MAX_TARGET_VOLTS             36.0f
+#if POWER_MAIN_APPLICATION
+#define POWER_FORWARD_DEFAULT_INPUT_VOLTS  24U
+#define POWER_FORWARD_DEFAULT_OUTPUT_VOLTS 12U
+#else
 #define POWER_FORWARD_DEFAULT_INPUT_VOLTS  12U
 #define POWER_FORWARD_DEFAULT_OUTPUT_VOLTS 36U
+#endif
 #endif
 
 #endif

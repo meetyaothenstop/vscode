@@ -14,7 +14,7 @@
 /* 屏幕缓冲区：8页 × 128列 */
 unsigned char ScreenBuffer[SCREEN_PAGE_NUM][SCREEN_COLUMN];
 
-#if POWER_BENCH_LIVE_OLED
+#if POWER_OLED_DMA
 /* All packets reside in ordinary SRAM, separate from the mutable drawing RAM.
  * Callbacks only publish progress; the foreground starts the next packet. */
 typedef enum { OLED_IDLE, OLED_COMMAND, OLED_COMMAND_DONE,
@@ -258,7 +258,7 @@ void OLED_Init(void)
     WriteCmd(0xAF);           // 打开OLED显示
     
     OLED_CLS();               // 初始化完成后清屏
-#if POWER_BENCH_LIVE_OLED
+#if POWER_OLED_DMA
     oled_dma_init();          // Boot only: called before Power_Init and PWM start.
 #endif
 }

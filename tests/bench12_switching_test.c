@@ -79,13 +79,23 @@ static void run(double input, double target, double voltage_peak_limit,
     printf("Minimum sampled IL: %.3f A at cycle %u, voltage %.3f V\n",
            sampled_min, minimum_cycle, minimum_voltage);
     assert(sampled_min > -1.0);
-    assert(sampled_peak < 1.5);
+    /* The broader40->36V main envelope has higher nominal ripple than the
+     * restricted bench. Keep a2A nominal-model guard, well below the7.5A trip;
+     * preserve the original1.5A bench regression without weakening it. */
+    assert(sampled_peak < (POWER_MAIN_APPLICATION ? 2.0 : 1.5));
 }
 
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
-#if POWER_BENCH_24V_BUCK_TEST
+#if POWER_MAIN_APPLICATION
+    /* Integer menu operating points; zero is verified as backend ALL-OFF.
+     * 36V Buck is exercised from40V, not from an unreachable12V source. */
+    const double cases[][2] = {{12.0, 1.0}, {12.0, 6.0}, {12.0, 11.0},
+                              {24.0, 12.0}, {40.0, 1.0}, {40.0, 12.0}, {40.0, 36.0}};
+    for (unsigned n = 0; n < sizeof(cases) / sizeof(cases[0]); ++n)
+        run(cases[n][0], cases[n][1], cases[n][1] * 1.25, 0.1);
+#elif POWER_BENCH_24V_BUCK_TEST
     const double inputs[] = {20.0, 24.0, 28.0};
     for (unsigned n = 0; n < sizeof(inputs) / sizeof(inputs[0]); ++n)
         run(inputs[n], 12.0, 13.2, 0.05);

@@ -56,7 +56,7 @@ static void sync_control_state(const MenuTelemetry *data)
         if (data->pending || data->state == MENU_STARTING || data->state == MENU_RUNNING)
             menu.editing = 0;
         dirty = 1;
-#if POWER_BENCH_LIVE_OLED
+#if POWER_OLED_DMA
         /* A completed old packet may drain, then restart the new state at page 0. */
         next_page = MENU_ROWS;
 #endif
@@ -91,7 +91,7 @@ void PowerUI_Service(const AdcMeasurements *measurements)
     }
     sync_control_state(&data);
 
-#if POWER_BENCH_LIVE_OLED
+#if POWER_OLED_DMA
     uint8_t allow = (uint8_t)(!data.pending && data.state != MENU_STARTING);
     HAL_StatusTypeDef transfer = OLED_TransferPoll(allow);
     if (transfer == HAL_BUSY) return;
@@ -101,10 +101,17 @@ void PowerUI_Service(const AdcMeasurements *measurements)
         dirty = 1;
         return;
     }
+    if (!allow) {
+        /* Poll may drain an old packet, but RefreshPage must not start a new
+         * command during startup, even when legacy OLED mute is disabled. */
+        next_page = MENU_ROWS;
+        dirty = 1;
+        return;
+    }
 #endif
 #if POWER_TEST_SKIP_OLED_ACTIVE
     if (data.pending || data.state == MENU_STARTING ||
-            (!POWER_BENCH_LIVE_OLED && data.state == MENU_RUNNING)) {
+            (!POWER_OLED_DMA && data.state == MENU_RUNNING)) {
         /* Key/start/stop handling above stays live. Restart a complete
          * display frame once faulted/stopped instead of sending stale pages. */
         next_page = MENU_ROWS;

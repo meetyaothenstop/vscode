@@ -24,7 +24,18 @@ static unsigned have_previous_entry;
 static volatile unsigned sample_valid;
 static PwmPlan resume_plan;
 
-#if POWER_BENCH_LATE_INPUT_ADC
+#if POWER_MAIN_APPLICATION
+/* STOP telemetry uses the late input sample. Other modes must qualify and
+ * run on the original ADC1 phase, even if the unused ADC2 sample is lost. */
+static volatile unsigned early_sample_valid;
+static volatile float early_input_volts;
+#define MODE_LIMIT(mode, name) (((mode) == 1U || (mode) == 3U) ? \
+    POWER_MAIN_BUCK_##name : POWER_##name)
+#else
+#define MODE_LIMIT(mode, name) POWER_##name
+#endif
+
+#if POWER_LATE_INPUT_ADC
 static ADC_HandleTypeDef input_adc;
 _Static_assert(POWER_INPUT_ADC_PHASE_TICKS > PWM_PERIOD_TICKS / 4U + 3U * 37U * 128U,
                "Input phase must follow the original ADC1 sequence");
@@ -224,6 +235,12 @@ void Power_Stop(void)
     __disable_irq();
     Power_EmergencyOff();
     start_pending = 0U;
+#if POWER_MAIN_APPLICATION
+    power_status.d_cmd = power_status.v_reference = 0.0f;
+    /* A later start must qualify on a fresh STOP sample, rather than the
+     * preceding mode's ADC1-only phase or its ignored ADC2 status. */
+    sample_valid = early_sample_valid = 0U;
+#endif
     if (power_status.state != POWER_FAULT) power_status.state = POWER_STOPPED;
     __set_PRIMASK(saved);
 }
@@ -234,6 +251,9 @@ void Power_ClearFault(void)
     __disable_irq();
     Power_EmergencyOff();
     start_pending = 0U;
+#if POWER_MAIN_APPLICATION
+    sample_valid = early_sample_valid = 0U;
+#endif
     if (!PowerProtection_Acknowledge()) hardware_trip();
     else {
         power_status.fault = 0U;
@@ -319,6 +339,9 @@ HAL_StatusTypeDef Power_Init(ADC_HandleTypeDef *adc, HRTIM_HandleTypeDef *hrtim)
     if (adc->Instance != ADC1 || hrtim->Instance != HRTIM1 ||
         HAL_RCC_GetHCLKFreq() != 150000000U) return HAL_ERROR;
     power_status.state = POWER_STOPPED;
+#if POWER_MAIN_APPLICATION
+    sample_valid = early_sample_valid = 0U;
+#endif
     if (PowerProtection_Init(hrtim) != HAL_OK) {
         trip(POWER_FAULT_HARDWARE);
         return HAL_ERROR;
@@ -355,7 +378,7 @@ HAL_StatusTypeDef Power_Init(ADC_HandleTypeDef *adc, HRTIM_HandleTypeDef *hrtim)
     trigger.Trigger = HRTIM_ADCTRIGGEREVENT24_TIMERA_CMP2;
     if (HAL_HRTIM_ADCTriggerConfig(hrtim, HRTIM_ADCTRIGGER_2, &trigger) != HAL_OK)
         return HAL_ERROR;
-#if POWER_BENCH_LATE_INPUT_ADC
+#if POWER_LATE_INPUT_ADC
     if (configure_late_input(hrtim) != HAL_OK) return HAL_ERROR;
 #endif
     /* Flush initial preloads before starting both counters in one MCR write. */
@@ -386,13 +409,26 @@ int Power_RequestStart(unsigned mode, float target_volts)
     diag_requested_mode = mode;
     diag_requested_target = target_volts;
 #endif
+#if POWER_MAIN_APPLICATION
+    /* A zero Buck target is an explicit all-gates-off request, including
+     * during preparation/running/fault. It never acknowledges a fault. */
+    if ((mode == 1U || mode == 3U) && target_volts == 0.0f) {
+        Power_Stop();
+        DIAG_REQUEST_RETURN(1);
+    }
+#endif
     int reverse = mode == 3U || mode == 4U;
     int boost = mode == 2U || mode == 4U;
-    float vin = reverse ? power_status.v_right : power_status.v_left;
-    float vout = reverse ? power_status.v_left : power_status.v_right;
+    float left = power_status.v_left;
+#if POWER_MAIN_APPLICATION
+    if (mode != 1U) left = early_input_volts;
+#endif
+    float vin = reverse ? power_status.v_right : left;
+    float vout = reverse ? left : power_status.v_right;
     if (power_status.state != POWER_STOPPED || start_pending != 0U) DIAG_REQUEST_RETURN(0);
     power_status.protection_ready = (uint32_t)PowerProtection_IsReady();
-    if (!power_status.protection_ready && !POWER_BENCH_12V_BUCK_TEST) {
+    if (!power_status.protection_ready && !POWER_BENCH_12V_BUCK_TEST &&
+        !(POWER_MAIN_APPLICATION && POWER_MAIN_ADC_SOFTWARE_ONLY)) {
         trip(POWER_FAULT_PROTECTION);
         DIAG_REQUEST_RETURN(0);
     }
@@ -403,13 +439,22 @@ int Power_RequestStart(unsigned mode, float target_volts)
     uint32_t rejection = 0U;
     if (mode < 1U || mode > 4U || (POWER_BENCH_12V_BUCK_TEST && mode != 1U))
         rejection = 1U;
-    else if (power_status.samples < 2U || !sample_valid) rejection = 2U;
-    else if (!(target_volts >= 1.0f && target_volts <= POWER_MAX_TARGET_VOLTS)) rejection = 3U;
-    else if (!(vin >= POWER_INPUT_MIN_VOLTS && vin <= POWER_INPUT_MAX_VOLTS)) rejection = 4U;
-    else if (!(fabsf(power_status.il) < POWER_START_CURRENT_LIMIT_AMPS)) rejection = 5U;
+    else if (power_status.samples < 2U ||
+#if POWER_MAIN_APPLICATION
+             !(mode == 1U ? sample_valid : early_sample_valid)
+#else
+             !sample_valid
+#endif
+            ) rejection = 2U;
+    else if (!(target_volts >= 1.0f && target_volts <= MODE_LIMIT(mode, MAX_TARGET_VOLTS))) rejection = 3U;
+    else if (!(vin >= MODE_LIMIT(mode, INPUT_MIN_VOLTS) && vin <= MODE_LIMIT(mode, INPUT_MAX_VOLTS))) rejection = 4U;
+    else if (!(fabsf(power_status.il) < MODE_LIMIT(mode, START_CURRENT_LIMIT_AMPS))) rejection = 5U;
     /* A charged output can drive reverse current at cold-start duty. */
-    else if (vout > POWER_START_OUTPUT_MAX_VOLTS) rejection = 6U;
+    else if (vout > MODE_LIMIT(mode, START_OUTPUT_MAX_VOLTS)) rejection = 6U;
     else if ((boost && vin >= target_volts) || (!boost && vin <= target_volts)) rejection = 7U;
+#if POWER_MAIN_APPLICATION
+    else if (mode == 1U && target_volts > vin * POWER_MAIN_BUCK_MAX_DUTY) rejection = 7U;
+#endif
     if (rejection) {
         trip_detail(POWER_FAULT_START, rejection);
         DIAG_REQUEST_RETURN(0);
@@ -483,6 +528,17 @@ void Power_TimerIRQ(void)
     uint32_t flags = ADC1->ISR;
     if (!(HRTIM1->sTimerxRegs[TIMER_B].TIMxISR & HRTIM_TIMISR_REP)) DIAG_IRQ_RETURN();
     HRTIM1->sTimerxRegs[TIMER_B].TIMxICR = HRTIM_TIMICR_REPC;
+#if POWER_MAIN_APPLICATION
+    uint32_t input_flags = ADC2->ISR;
+    uint16_t late_input_raw = (uint16_t)ADC2->DR;
+    unsigned late_valid = (input_flags & (ADC_ISR_EOC | ADC_ISR_EOS | ADC_ISR_OVR)) ==
+                          (ADC_ISR_EOC | ADC_ISR_EOS);
+    unsigned use_late_input = (power_status.state == POWER_STOPPED && !start_pending) ||
+                              (active_mode == 1U && power_status.state != POWER_FAULT);
+    /* ADC2 runs in every mode. Drain it even on timing/ADC1 failure, so a
+     * later Buck request cannot accept an earlier period's sticky result. */
+    ADC2->ISR = ADC_ISR_EOC | ADC_ISR_EOS | ADC_ISR_OVR;
+#endif
     /* Analog hardware has already forced gates off. Catch even a short
      * pulse before sampling/arming if its dedicated IRQ has not run yet. */
     if (PowerProtection_FaultPending()) hardware_trip();
@@ -507,23 +563,42 @@ void Power_TimerIRQ(void)
     DIAG_CHECKPOINT(POWER_DIAG_CP_ENTRY);
     DIAG_STAGE(POWER_DIAG_STAGE_ADC);
     if (!(flags & ADC_ISR_JEOS) || (flags & ADC_ISR_JQOVF)
-#if POWER_BENCH_LATE_INPUT_ADC
+#if POWER_LATE_INPUT_ADC && !POWER_MAIN_APPLICATION
         || (ADC2->ISR & (ADC_ISR_EOC | ADC_ISR_EOS | ADC_ISR_OVR)) !=
            (ADC_ISR_EOC | ADC_ISR_EOS)
 #endif
        ) {
         sample_valid = 0U;
+#if POWER_MAIN_APPLICATION
+        early_sample_valid = 0U;
+#endif
         if (start_pending || (power_status.state != POWER_STOPPED &&
                               power_status.state != POWER_FAULT))
             trip(POWER_FAULT_ADC);
         ADC1->ISR = ADC_ISR_JQOVF | ADC_ISR_JEOS | ADC_ISR_JEOC;
-#if POWER_BENCH_LATE_INPUT_ADC
+#if POWER_LATE_INPUT_ADC && !POWER_MAIN_APPLICATION
         ADC2->ISR = ADC_ISR_EOC | ADC_ISR_EOS | ADC_ISR_OVR;
 #endif
         DIAG_IRQ_RETURN();
     }
+#if POWER_MAIN_APPLICATION
+    early_input_volts = (float)(uint16_t)ADC1->JDR2 * ADC_LEFT_VOLTS_PER_COUNT;
+    early_sample_valid = 1U;
+    if (use_late_input && !late_valid &&
+        (start_pending || (power_status.state != POWER_STOPPED && power_status.state != POWER_FAULT))) {
+        sample_valid = 0U;
+        trip(POWER_FAULT_ADC);
+        ADC1->ISR = ADC_ISR_JEOS | ADC_ISR_JEOC;
+        DIAG_IRQ_RETURN();
+    }
+#endif
     power_status.raw_il = (uint16_t)ADC1->JDR1;
-#if POWER_BENCH_LATE_INPUT_ADC
+#if POWER_MAIN_APPLICATION
+    /* Invalid STOP late input stays visibly invalid. Preserve the previous
+     * VH value while retaining fresh ADC1 current/right bus for other modes. */
+    if (!use_late_input) power_status.raw_vh = (uint16_t)ADC1->JDR2;
+    else if (late_valid) power_status.raw_vh = late_input_raw;
+#elif POWER_LATE_INPUT_ADC
     power_status.raw_vh = (uint16_t)ADC2->DR;
     /* DR consumes EOC; clear EOS as well so no previous result is accepted.
      * Never fall back to the earlier ADC1 JDR2 value if this sample is lost. */
@@ -538,7 +613,11 @@ void Power_TimerIRQ(void)
     power_status.v_left = (float)power_status.raw_vh * ADC_LEFT_VOLTS_PER_COUNT;
     power_status.v_right = (float)power_status.raw_vl * ADC_RIGHT_VOLTS_PER_COUNT;
     ++power_status.samples;
+#if POWER_MAIN_APPLICATION
+    sample_valid = !use_late_input || late_valid;
+#else
     sample_valid = 1U;
+#endif
     DIAG_CHECKPOINT(POWER_DIAG_CP_ADC);
     if (power_status.state == POWER_FAULT) DIAG_IRQ_RETURN();
     unsigned starting = start_pending;
@@ -547,9 +626,14 @@ void Power_TimerIRQ(void)
     int reverse = active_mode >= 3U;
     float vin = reverse ? power_status.v_right : power_status.v_left;
     float vout = reverse ? power_status.v_left : power_status.v_right;
-    if (!(vin >= POWER_INPUT_MIN_VOLTS && vin <= POWER_INPUT_MAX_VOLTS))
+    if (!(vin >= MODE_LIMIT(active_mode, INPUT_MIN_VOLTS) &&
+          vin <= MODE_LIMIT(active_mode, INPUT_MAX_VOLTS)))
         trip(POWER_FAULT_INPUT);
-    if (vout > active_target * POWER_OUTPUT_OVERVOLTAGE_RATIO)
+#if POWER_MAIN_APPLICATION
+    if (active_mode == 1U && active_target > vin * POWER_MAIN_BUCK_MAX_DUTY)
+        trip(POWER_FAULT_INPUT);
+#endif
+    if (vout > active_target * MODE_LIMIT(active_mode, OUTPUT_OVERVOLTAGE_RATIO))
         trip(POWER_FAULT_OUTPUT);
     if (fabsf(power_status.il) >= POWER_CURRENT_TRIP_AMPS || power_status.raw_il >= 4090U ||
         power_status.raw_il <= 5U) trip(POWER_FAULT_CURRENT);
@@ -565,10 +649,10 @@ void Power_TimerIRQ(void)
      * HOLD resume deliberately has charged output and is excluded. */
     if ((starting || (!bootstrap_resume &&
          (power_status.state == POWER_BOOTSTRAP || power_status.state == POWER_ARMING))) &&
-        (!(fabsf(power_status.il) < POWER_START_CURRENT_LIMIT_AMPS) ||
-         vout > POWER_START_OUTPUT_MAX_VOLTS))
+        (!(fabsf(power_status.il) < MODE_LIMIT(active_mode, START_CURRENT_LIMIT_AMPS)) ||
+         vout > MODE_LIMIT(active_mode, START_OUTPUT_MAX_VOLTS)))
         trip_detail(POWER_FAULT_START,
-                    !(fabsf(power_status.il) < POWER_START_CURRENT_LIMIT_AMPS) ? 8U : 9U);
+                    !(fabsf(power_status.il) < MODE_LIMIT(active_mode, START_CURRENT_LIMIT_AMPS)) ? 8U : 9U);
     if (power_status.state == POWER_FAULT) DIAG_IRQ_RETURN();
     DIAG_CHECKPOINT(POWER_DIAG_CP_CHECKS);
     DIAG_STAGE(POWER_DIAG_STAGE_STATE);

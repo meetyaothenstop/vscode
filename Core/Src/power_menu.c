@@ -55,8 +55,12 @@ MenuRequest Menu_HandleKey(PowerMenu *menu, MenuKey key, const MenuTelemetry *da
             menu->notice = MENU_NOTICE_LOCKED;
             return request;
         }
-        unsigned minimum = menu->selection == 0 ? 6U : 1U;
-        unsigned maximum = menu->selection == 0 ? 40U : 36U;
+        unsigned minimum = menu->selection == 0 ?
+            (POWER_MAIN_APPLICATION ? POWER_MAIN_INPUT_SETTING_MIN : 6U) :
+            (POWER_MAIN_APPLICATION ? POWER_MAIN_OUTPUT_SETTING_MIN : 1U);
+        unsigned maximum = menu->selection == 0 ?
+            (POWER_MAIN_APPLICATION ? POWER_MAIN_INPUT_SETTING_MAX : 40U) :
+            (POWER_MAIN_APPLICATION ? POWER_MAIN_OUTPUT_SETTING_MAX : 36U);
         if (key == MENU_KEY_UP && menu->edit_volts < maximum) ++menu->edit_volts;
         if (key == MENU_KEY_DOWN && menu->edit_volts > minimum) --menu->edit_volts;
         if (key == MENU_KEY_OK) {
@@ -77,7 +81,10 @@ MenuRequest Menu_HandleKey(PowerMenu *menu, MenuKey key, const MenuTelemetry *da
         }
     } else if (active(data)) {
         request.action = MENU_ACTION_STOP;
-    } else if (data->state != MENU_FAULT && data->fault == 0U) {
+    } else if ((POWER_MAIN_APPLICATION && s->output_volts == 0U) ||
+               (data->state != MENU_FAULT && data->fault == 0U)) {
+        /* Main Buck zero is a backend OFF request, including while faulted.
+         * The backend disables outputs and preserves the first fault. */
         if (Menu_Mode(menu) == MENU_MODE_EQUAL) menu->notice = MENU_NOTICE_EQUAL;
         else {
             request.action = MENU_ACTION_START;
@@ -143,7 +150,9 @@ void Menu_Render(const PowerMenu *menu, const MenuTelemetry *data, MenuFrame *fr
         frame->rows[row][MENU_COLUMNS] = '\0';
     }
     if (menu->page == MENU_HOME) {
-        put(frame, 0, 0, POWER_BENCH_24V_BUCK_TEST ?
+        put(frame, 0, 0, POWER_MAIN_APPLICATION ?
+            (POWER_MAIN_ADC_SOFTWARE_ONLY ? "MAIN ADC SW 6A" : "MAIN HW GUARD 6A") :
+            POWER_BENCH_24V_BUCK_TEST ?
             (POWER_BENCH_LIVE_OLED ? "24V BUCK DMA OVP15 C6" : "24V FAST OVP15 C6") :
             POWER_BENCH_LIVE_OLED ? "12V BUCK DMA OVP8" :
             POWER_BENCH_LATE_INPUT_ADC ? "12V BUCK ADC2 OVP8" :
@@ -162,6 +171,7 @@ void Menu_Render(const PowerMenu *menu, const MenuTelemetry *data, MenuFrame *fr
                        menu->direction == MENU_FORWARD ? "FORWARD" : "REVERSE",
                        mode == MENU_MODE_BUCK ? "BUCK" :
                        (mode == MENU_MODE_BOOST ? "BOOST" : "EQUAL"),
+                       POWER_MAIN_APPLICATION ? " SW-MAIN" :
                        POWER_BENCH_24V_BUCK_TEST ? " SW15-C6" :
                        POWER_BENCH_LIVE_OLED ? " SW-DMA8" :
                        POWER_BENCH_LATE_INPUT_ADC ? " SW-A2-8" : POWER_BENCH_FAST_BUCK ? " SW-FAST" :

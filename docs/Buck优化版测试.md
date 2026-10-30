@@ -1,5 +1,10 @@
 # Buck 优化版：24V→12V与实时OLED
 
+本页保留受限台架配置及历史。当前主应用已按用户要求集成到`MDK-ARM/bidreaction.uvprojx`，
+完整四模式与新Buck范围见[主工程Buck测试](主工程Buck测试.md)。
+共享代码集成后，台架本轮重建HEX为`7D9ADE7EC0931D15CEA20725440093E05D75BE36B98B11FE4B0A2B6FB23C0056`，
+下文旧哈希只代表相应历史构建。
+
 工程：`MDK-ARM/bench12_buck_fast.uvprojx`
 
 Target：`bench12_buck_fast`

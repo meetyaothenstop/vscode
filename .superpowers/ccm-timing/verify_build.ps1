@@ -2,7 +2,8 @@ param(
     [Parameter(Mandatory=$true)][string]$MapPath,
     [Parameter(Mandatory=$true)][string]$HexPath,
     [switch]$Uninstrumented,
-    [switch]$LiveOled
+    [switch]$LiveOled,
+    [switch]$MainApplication
 )
 $ErrorActionPreference = 'Stop'
 $mapText = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $MapPath))
@@ -23,6 +24,10 @@ if ($execBase -ne 0x10000000 -or $maxSize -ne 0x8000 -or $codeSize -eq 0 -or
     ($loadBase + $codeSize) -gt 0x08020000) { throw 'Unsafe CCM execution/load bounds' }
 $hotSymbols = @('HRTIM1_TIMB_IRQHandler','Power_TimerIRQ','enable_outputs',
     'forward_step','PWM_MakePlan','PWM_EntryIsTimely','PowerProtection_FaultPending')
+if ($MainApplication) {
+    $hotSymbols += @('forward_main_buck_step','forward_main_full_step',
+        'reverse_step','reverse_hold_step','reverse_prepare_resume')
+}
 foreach ($symbol in $hotSymbols) {
     $address = Get-SymbolAddress $symbol
     if ($address -lt $execBase -or $address -ge ($execBase + $codeSize)) {

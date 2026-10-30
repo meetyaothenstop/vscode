@@ -39,7 +39,7 @@ static unsigned protection_fault_on_poll;
 static unsigned protection_fault_after_safe_poll;
 static uint32_t advance_cycles_on_poll;
 
-#if POWER_BENCH_LATE_INPUT_ADC
+#if POWER_LATE_INPUT_ADC
 static unsigned input_init_step, input_fail_step, input_started;
 static uint32_t next_input_flags = ADC_ISR_EOC | ADC_ISR_EOS;
 static uint16_t early_input_raw;
@@ -148,7 +148,7 @@ HAL_StatusTypeDef HAL_HRTIM_WaveformCompareConfig(HRTIM_HandleTypeDef *timer, ui
     uint32_t unit, HRTIM_CompareCfgTypeDef *cfg)
 {
     CHECK(timer->Instance == HRTIM1 && index == TIMER_A);
-#if POWER_BENCH_LATE_INPUT_ADC
+#if POWER_LATE_INPUT_ADC
     if (unit == HRTIM_COMPAREUNIT_4) {
         CHECK(input_init_step == 3U && cfg->CompareValue == 23040U);
         HRTIM1->sTimerxRegs[index].CMP4xR = cfg->CompareValue;
@@ -164,7 +164,7 @@ HAL_StatusTypeDef HAL_HRTIM_ADCTriggerConfig(HRTIM_HandleTypeDef *timer, uint32_
 {
     CHECK(timer->Instance == HRTIM1);
     CHECK(cfg->UpdateSource == HRTIM_ADCTRIGGERUPDATE_TIMER_A);
-#if POWER_BENCH_LATE_INPUT_ADC
+#if POWER_LATE_INPUT_ADC
     if (index == HRTIM_ADCTRIGGER_1) {
         CHECK(input_init_step == 4U && cfg->Trigger == HRTIM_ADCTRIGGEREVENT13_TIMERA_CMP4);
         return input_init_result();
@@ -177,7 +177,7 @@ HAL_StatusTypeDef HAL_HRTIM_ADCTriggerConfig(HRTIM_HandleTypeDef *timer, uint32_
 HAL_StatusTypeDef HAL_HRTIM_WaveformCounterStart(HRTIM_HandleTypeDef *timer, uint32_t counters)
 {
     CHECK(timer->Instance == HRTIM1);
-#if POWER_BENCH_LATE_INPUT_ADC
+#if POWER_LATE_INPUT_ADC
     CHECK(input_started && input_init_step == 6U);
 #endif
     counters_started = counters;
@@ -221,7 +221,7 @@ static void irq(float left, float right, float il, uint32_t adc_flags,
     HRTIM1->sTimerxRegs[TIMER_B].TIMxISR = HRTIM_TIMISR_REP;
     ADC1->JDR1 = raw_current(il);
     ADC1->JDR2 = raw_voltage(left, 0.0461f);
-#if POWER_BENCH_LATE_INPUT_ADC
+#if POWER_LATE_INPUT_ADC
     if (override_early_input) {
         ADC1->JDR2 = early_input_raw;
         override_early_input = 0U;
@@ -307,7 +307,7 @@ static void arm_pending(unsigned mode, float left, float right)
         CHECK(HRTIM1->sTimerxRegs[TIMER_A].CMP1xR == 0U);
     } else {
         CHECK(HRTIM1->sTimerxRegs[TIMER_B].CMP1xR ==
-              (POWER_BENCH_12V_BUCK_TEST ? 0U : PWM_MIN_COMPARE_TICKS));
+              ((POWER_BENCH_12V_BUCK_TEST || POWER_MAIN_APPLICATION) ? 0U : PWM_MIN_COMPARE_TICKS));
         CHECK(HRTIM1->sTimerxRegs[TIMER_A].CMP1xR == 28160U);
     }
     period(left, right, 0.0f);
@@ -332,7 +332,7 @@ static void expect_fault(uint32_t fault)
     CHECK(enabled_outputs == 0U && !Power_IsStartPending());
 }
 
-#if POWER_BENCH_LATE_INPUT_ADC
+#if POWER_LATE_INPUT_ADC
 static void late_input_sampling(void)
 {
     const float bench_source = POWER_BENCH_24V_BUCK_TEST ? 24.0f : 12.0f;
@@ -1023,7 +1023,347 @@ static void unified_first_fault_diagnostics(void)
 }
 #endif
 
-#if POWER_BENCH_24V_BUCK_TEST
+#if POWER_MAIN_APPLICATION
+static void main_zero_requests(void)
+{
+    /* A zero request is shutdown, even before the first valid ADC sample. */
+    CHECK(request(1U, 0.0f));
+    CHECK(power_status.state == POWER_STOPPED && !power_status.fault && !enabled_outputs);
+    CHECK(HRTIM1->sCommonRegs.OENR == 0U && !Power_IsStartPending());
+    CHECK(request(3U, -0.0f));
+    const unsigned prep[] = {0U, 0U, 1U, 30U, 31U, 32U, 33U, 33U};
+    for (unsigned mode = 1U; mode <= 3U; mode += 2U) {
+        const float left = mode == 1U ? 24.0f : 0.0f;
+        const float right = mode == 1U ? 0.0f : 24.0f;
+        for (unsigned mailbox = 0U; mailbox < 2U; ++mailbox) {
+            for (unsigned phase = 0U; phase < 8U; ++phase) {
+                stopped_samples(left, right, 0.0f);
+                if (phase) {
+                    CHECK(request(mode, 12.0f));
+                    for (unsigned k = 0U; k < prep[phase]; ++k) period(left, right, 0.0f);
+                }
+                if (phase == 7U) {
+                    period(left, right, mode == 1U ? 7.6f : -7.6f);
+                    expect_fault(POWER_FAULT_CURRENT);
+                }
+                PowerStatus snapshot = power_status;
+                if (mailbox) {
+                    power_target_volts = 0.0f;
+                    power_command = mode == 1U ? POWER_CMD_START_BUCK : POWER_CMD_START_REVERSE_BUCK;
+                    service();
+                } else CHECK(request(mode, phase & 1U ? -0.0f : 0.0f));
+                CHECK(!enabled_outputs && !Power_IsStartPending());
+                CHECK(HRTIM1->sCommonRegs.OENR == 0U);
+                CHECK(power_status.state == (phase == 7U ? POWER_FAULT : POWER_STOPPED));
+                CHECK(power_status.d_cmd == 0.0f && power_status.v_reference == 0.0f);
+                CHECK(power_status.fault == snapshot.fault && power_status.fault_detail == snapshot.fault_detail);
+                CHECK(power_status.fault_raw_il == snapshot.fault_raw_il);
+                CHECK(power_status.fault_raw_vh == snapshot.fault_raw_vh);
+                CHECK(power_status.fault_raw_vl == snapshot.fault_raw_vl);
+                CHECK(power_status.fault_il == snapshot.fault_il);
+                for (unsigned k = 0U; k < 35U; ++k) {
+                    period(left, right, 0.0f);
+                    CHECK(!enabled_outputs && !Power_IsStartPending() && HRTIM1->sCommonRegs.OENR == 0U);
+                }
+            }
+        }
+    }
+    stopped_samples(24.0f, 1.1f, 0.6f);
+    CHECK(request(1U, 0.0f)); /* Residual charge/current cannot block an OFF request. */
+    period(24.0f, 1.1f, 0.6f);
+    CHECK(!request(1U, 12.0f) && power_status.fault_detail == 5U);
+    stopped_samples(24.0f, 1.1f, 0.0f);
+    CHECK(request(1U, 0.0f));
+    period(24.0f, 1.1f, 0.0f);
+    CHECK(!request(1U, 12.0f) && power_status.fault_detail == 6U);
+    puts("Main Buck zero: direct/mailbox, no samples, pending/bootstrap/arming/run/fault, no restart: PASS");
+}
+
+static void main_readiness_policy(void)
+{
+    protection_ready = 0U;
+    for (unsigned mode = 1U; mode <= 4U; ++mode) {
+        const float source = mode == 1U || mode == 3U ? 24.0f : 12.0f;
+        stopped_samples(mode >= 3U ? 0.0f : source, mode >= 3U ? source : 0.0f, 0.0f);
+#if POWER_MAIN_ADC_SOFTWARE_ONLY
+        CHECK(request(mode, mode & 1U ? 12.0f : 36.0f));
+        arm_pending(mode, mode >= 3U ? 0.0f : source, mode >= 3U ? source : 0.0f);
+        CHECK(power_status.protection_ready == 0U && power_status.fault == 0U);
+#else
+        CHECK(!request(mode, mode & 1U ? 12.0f : 36.0f));
+        expect_fault(POWER_FAULT_PROTECTION);
+#endif
+        CHECK(request(mode >= 3U ? 3U : 1U, 0.0f));
+        CHECK(!enabled_outputs && !Power_IsStartPending());
+    }
+    stopped_samples(24.0f, 0.0f, 0.0f);
+    protection_latched = 8U;
+    CHECK(!request(1U, 12.0f));
+#if POWER_MAIN_ADC_SOFTWARE_ONLY
+    expect_fault(POWER_FAULT_HARDWARE);
+#else
+    expect_fault(POWER_FAULT_PROTECTION);
+#endif
+    CHECK(request(1U, 0.0f) && protection_latched == 8U);
+    clear_fault();
+    protection_ready = 1U;
+    puts("Main readiness: explicit ADC-only bypass, truthful status, zero preserves hardware latch: PASS");
+}
+
+static void main_four_modes_and_invalid_requests(void)
+{
+    _Static_assert(POWER_CMD_START_BOOST == 1 && POWER_CMD_STOP == 2 &&
+                   POWER_CMD_CLEAR_FAULT == 3 && POWER_CMD_START_BUCK == 4 &&
+                   POWER_CMD_START_REVERSE_BUCK == 5 && POWER_CMD_START_REVERSE_BOOST == 6,
+                   "debugger mailbox ABI changed");
+    commands_stop_and_clear();
+    for (unsigned mode = 1U; mode <= 4U; ++mode) {
+        const float source = mode & 1U ? 24.0f : 12.0f;
+        const float target = mode & 1U ? 12.0f : 36.0f;
+        start_running(mode, source, target);
+        CHECK(mode >= 3U ? reverse_Y.EN_R_BUCK == (mode == 3U) : forward_Y.EN_F_BUCK == (mode == 1U));
+        CHECK(mode >= 3U ? reverse_Y.EN_R_BOOST == (mode == 4U) : forward_Y.EN_F_BOOST == (mode == 2U));
+        power_target_volts = 0.0f; service();
+        CHECK(power_status.state == POWER_RUNNING); /* A target write alone is not a command. */
+    }
+    const float invalid[] = {-1.0f, -0.0001f, 0.5f, 36.001f, NAN, INFINITY, -INFINITY};
+    for (unsigned mode = 1U; mode <= 4U; ++mode) {
+        for (unsigned n = 0; n < sizeof(invalid) / sizeof(invalid[0]); ++n) {
+            stopped_samples(mode >= 3U ? 0.0f : 24.0f, mode >= 3U ? 24.0f : 0.0f, 0.0f);
+            CHECK(!request(mode, invalid[n]) && power_status.fault_detail == 3U);
+            CHECK(!enabled_outputs && HRTIM1->sCommonRegs.OENR == 0U);
+        }
+    }
+    for (unsigned mode = 2U; mode <= 4U; mode += 2U) {
+        stopped_samples(mode >= 3U ? 0.0f : 12.0f, mode >= 3U ? 12.0f : 0.0f, 0.0f);
+        CHECK(!request(mode, 0.0f) && power_status.fault_detail == 3U);
+    }
+    stopped_samples(24.0f, 0.0f, 0.0f);
+    CHECK(!request(0U, 0.0f) && power_status.fault_detail == 1U);
+    puts("Main four modes/mailbox ABI, target writes, invalid finite/NaN/infinities and no zero Boost: PASS");
+}
+
+static void main_buck_limits_and_reachability(void)
+{
+    const float exact[] = {10.0f, 42.0f, 9.999f, 42.001f};
+    for (unsigned mode = 1U; mode <= 3U; mode += 2U) {
+        for (unsigned n = 0U; n < 4U; ++n) {
+            stopped_samples(mode == 1U ? 24.0f : 0.0f, mode == 1U ? 0.0f : 24.0f, 0.0f);
+            if (mode == 1U) power_status.v_left = exact[n];
+            else power_status.v_right = exact[n];
+            CHECK(request(mode, 1.0f) == (n < 2U));
+            if (n >= 2U) CHECK(power_status.fault_detail == 4U);
+        }
+        const float sources[] = {12.0f, 24.0f, 40.0f};
+        for (unsigned n = 0U; n < 3U; ++n) start_running(mode, sources[n], n == 2U ? 36.0f : 6.0f);
+    }
+    stopped_samples(40.0f, 0.0f, 0.0f); CHECK(request(1U, 36.0f));
+    stopped_samples(12.0f, 0.0f, 0.0f); CHECK(!request(1U, 36.0f) && power_status.fault_detail == 7U);
+    stopped_samples(24.0f, 0.0f, 0.0f);
+    power_status.v_left = 20.0f; CHECK(request(1U, 19.0f));
+    stopped_samples(24.0f, 0.0f, 0.0f);
+    power_status.v_left = 20.0f; CHECK(!request(1U, 19.001f) && power_status.fault_detail == 7U);
+    stopped_samples(0.0f, 24.0f, 0.0f); CHECK(request(3U, 23.5f)); /* Reverse retains strict<Vin policy. */
+    stopped_samples(0.0f, 24.0f, 0.0f); CHECK(!request(3U, power_status.v_right));
+    const unsigned phases[] = {0U, 1U, 30U, 31U, 32U, 33U};
+    for (unsigned n = 0U; n < sizeof(phases) / sizeof(phases[0]); ++n) {
+        stopped_samples(40.0f, 0.0f, 0.0f); CHECK(request(1U, 36.0f));
+        for (unsigned k = 0U; k < phases[n]; ++k) period(40.0f, 0.0f, 0.0f);
+        period(37.0f, 0.0f, 0.0f);
+        expect_fault(POWER_FAULT_INPUT);
+        CHECK(HRTIM1->sCommonRegs.OENR == 0U);
+    }
+    const float outside[] = {9.9f, 42.1f};
+    for (unsigned mode = 1U; mode <= 3U; mode += 2U) {
+        for (unsigned n = 0U; n < 2U; ++n) {
+            start_running(mode, 24.0f, 6.0f);
+            period(mode == 1U ? outside[n] : 0.0f, mode == 1U ? 0.0f : outside[n], 0.0f);
+            expect_fault(POWER_FAULT_INPUT);
+            CHECK(fabsf(power_status.fault_input_volts - outside[n]) < 0.02f);
+        }
+    }
+    for (unsigned mode = 2U; mode <= 4U; mode += 2U) {
+        stopped_samples(mode == 2U ? 41.0f : 0.0f, mode == 2U ? 0.0f : 41.0f, 0.0f);
+        CHECK(!request(mode, 36.0f) && power_status.fault_detail == 4U);
+    }
+    for (unsigned mode = 1U; mode <= 3U; mode += 2U) {
+        const float gain = mode == 1U ? ADC_LEFT_VOLTS_PER_COUNT : ADC_RIGHT_VOLTS_PER_COUNT;
+        const unsigned lower_raw = (unsigned)floorf(10.0f / gain);
+        const unsigned upper_raw = (unsigned)floorf(42.0f / gain);
+        CHECK(lower_raw * gain < 10.0f && (lower_raw + 1U) * gain >= 10.0f);
+        CHECK(upper_raw * gain <= 42.0f && (upper_raw + 1U) * gain > 42.0f);
+        const unsigned inside[] = {lower_raw + 1U, upper_raw};
+        const unsigned outside_raw[] = {lower_raw, upper_raw + 1U};
+        for (unsigned edge = 0U; edge < 2U; ++edge) {
+            start_running(mode, 24.0f, 1.0f);
+            period(mode == 1U ? inside[edge] * gain : 0.0f,
+                   mode == 1U ? 0.0f : inside[edge] * gain, 0.0f);
+            CHECK(power_status.state == POWER_RUNNING);
+            period(mode == 1U ? outside_raw[edge] * gain : 0.0f,
+                   mode == 1U ? 0.0f : outside_raw[edge] * gain, 0.0f);
+            expect_fault(POWER_FAULT_INPUT);
+            CHECK((mode == 1U ? power_status.fault_raw_vh : power_status.fault_raw_vl) == outside_raw[edge]);
+        }
+    }
+    puts("Main Buck: nominal12/24/40, sampled10..42,36V, forward.95 reachability and every preparation sag: PASS");
+}
+
+static void main_mode_protection(void)
+{
+    for (unsigned mode = 1U; mode <= 4U; ++mode) {
+        const float source = mode & 1U ? 24.0f : 12.0f;
+        const float target = mode & 1U ? 12.0f : 36.0f;
+        const float residual = mode & 1U ? 0.9f : 0.2f;
+        const float current = mode & 1U ? 0.48f : 0.23f;
+        stopped_samples(mode >= 3U ? residual : source, mode >= 3U ? source : residual, mode >= 3U ? -current : current);
+        CHECK(request(mode, target));
+        for (unsigned k = 0; k < 33U; ++k)
+            period(mode >= 3U ? residual : source, mode >= 3U ? source : residual, mode >= 3U ? -current : current);
+        CHECK(power_status.state == POWER_RUNNING);
+        stopped_samples(mode >= 3U ? 0.0f : source, mode >= 3U ? source : 0.0f, mode >= 3U ? -0.5f : 0.5f);
+        power_status.il = mode >= 3U ? -0.5f : 0.5f;
+        CHECK(!request(mode, target) && power_status.fault_detail == 5U);
+        start_running(mode, source, target);
+        const float threshold = mode & 1U ? 15.0f : 39.6f;
+        const float gain = mode >= 3U ? ADC_LEFT_VOLTS_PER_COUNT : ADC_RIGHT_VOLTS_PER_COUNT;
+        const float below = floorf(threshold / gain) * gain;
+        period(mode >= 3U ? below : source, mode >= 3U ? source : below, 0.0f);
+        CHECK(power_status.state != POWER_FAULT);
+        period(mode >= 3U ? below + gain : source, mode >= 3U ? source : below + gain, 0.0f);
+        expect_fault(POWER_FAULT_OUTPUT);
+    }
+    const float stale_output[] = {0.0f, 1.05f};
+    const float stale_current[] = {0.55f, 0.0f};
+    for (unsigned mode = 1U; mode <= 3U; mode += 2U) {
+        for (unsigned n = 0U; n < 2U; ++n) {
+            const unsigned phases[] = {0U, 1U, 31U, 32U};
+            for (unsigned p = 0U; p < 4U; ++p) {
+                stopped_samples(mode == 1U ? 24.0f : 0.0f, mode == 1U ? 0.0f : 24.0f, 0.0f);
+                CHECK(request(mode, 12.0f));
+                for (unsigned k = 0; k < phases[p]; ++k) period(mode == 1U ? 24.0f : 0.0f, mode == 1U ? 0.0f : 24.0f, 0.0f);
+                period(mode == 1U ? 24.0f : stale_output[n], mode == 1U ? stale_output[n] : 24.0f,
+                       mode == 1U ? stale_current[n] : -stale_current[n]);
+                expect_fault(POWER_FAULT_START);
+                CHECK(power_status.fault_detail == (n ? 9U : 8U) && HRTIM1->sCommonRegs.OENR == 0U);
+            }
+        }
+    }
+    start_running(1U, 24.0f, 12.0f);
+    for (unsigned k = 0; k < 100000U; ++k) {
+        period(24.0f, 0.0f, 0.0f);
+        CHECK(forward_B.Saturation <= 6.000001f);
+    }
+    CHECK(forward_B.Saturation > 5.99f);
+    period(24.0f, 6.0f, 6.5f); CHECK(power_status.state == POWER_RUNNING);
+    /* Independent hand-checked ADC codes straddling the original7.5A trip. */
+    CHECK(4008U * ADC_CURRENT_AMPS_PER_COUNT - ADC_CURRENT_ZERO_AMPS < 7.5f);
+    CHECK(4009U * ADC_CURRENT_AMPS_PER_COUNT - ADC_CURRENT_ZERO_AMPS > 7.5f);
+    period(24.0f, 6.0f, 4008U * ADC_CURRENT_AMPS_PER_COUNT - ADC_CURRENT_ZERO_AMPS);
+    CHECK(power_status.state == POWER_RUNNING);
+    period(24.0f, 6.0f, 4009U * ADC_CURRENT_AMPS_PER_COUNT - ADC_CURRENT_ZERO_AMPS);
+    expect_fault(POWER_FAULT_CURRENT); CHECK(power_status.fault_raw_il == 4009U);
+    CHECK(request(1U, 0.0f)); period(24.0f, 0.0f, 0.0f);
+    CHECK(power_status.fault_raw_il == 4009U);
+    puts("Main mode protection: Buck.5A/1V/1.25x, Boost.25A/.25V/1.1x,6A reference vs7.5A sampled trip: PASS");
+}
+
+static void main_adc_mode_selection(void)
+{
+    const uint32_t invalid[] = {0U, ADC_ISR_EOC, ADC_ISR_EOS, ADC_ISR_EOC | ADC_ISR_EOS | ADC_ISR_OVR};
+    for (unsigned mode = 1U; mode <= 4U; ++mode) {
+        const float source = mode & 1U ? 24.0f : 12.0f;
+        const float target = mode & 1U ? 12.0f : 36.0f;
+        for (unsigned bad = 0; bad < 4U; ++bad) {
+            stopped_samples(mode >= 3U ? 0.0f : source, mode >= 3U ? source : 0.0f, 0.0f);
+            early_input_raw = raw_voltage(mode >= 3U ? 0.0f : source, ADC_LEFT_VOLTAGE_GAIN);
+            override_early_input = 1U; next_input_flags = invalid[bad];
+            period(mode >= 3U ? 20.0f : source, mode >= 3U ? source : 0.0f, 0.0f);
+            CHECK(!Power_SamplesAreValid());
+            CHECK(request(mode, target) == (mode != 1U));
+            if (mode == 1U) { expect_fault(POWER_FAULT_START); continue; }
+            /* A consumed ADC1 start must not be blocked by unused ADC2 errors. */
+            for (unsigned k = 0; k < 34U; ++k) {
+                early_input_raw = raw_voltage(mode >= 3U ? 0.0f : source, ADC_LEFT_VOLTAGE_GAIN);
+                override_early_input = 1U; next_input_flags = invalid[bad];
+                period(mode >= 3U ? 20.0f : 41.0f, mode >= 3U ? source : 0.0f, 0.0f);
+                CHECK(power_status.fault == 0U);
+                CHECK(ADC2->ISR == (ADC_ISR_EOC | ADC_ISR_EOS | ADC_ISR_OVR));
+            }
+            CHECK(power_status.state == POWER_RUNNING && Power_SamplesAreValid());
+            CHECK(fabsf(power_status.v_left - (mode >= 3U ? 0.0f : source)) < 0.02f);
+        }
+    }
+    const unsigned phases[] = {0U, 1U, 31U, 33U};
+    for (unsigned p = 0U; p < 4U; ++p) {
+        for (unsigned bad = 0U; bad < 4U; ++bad) {
+            stopped_samples(24.0f, 0.0f, 0.0f); CHECK(request(1U, 12.0f));
+            for (unsigned k = 0; k < phases[p]; ++k) period(24.0f, 0.0f, 0.0f);
+            next_input_flags = invalid[bad]; period(24.0f, 0.0f, 0.0f);
+            expect_fault(POWER_FAULT_ADC); CHECK(!Power_SamplesAreValid());
+        }
+    }
+    start_running(1U, 24.0f, 12.0f);
+    early_input_raw = raw_voltage(45.0f, ADC_LEFT_VOLTAGE_GAIN); override_early_input = 1U;
+    period(24.0f, 0.0f, 0.0f); CHECK(power_status.state == POWER_RUNNING);
+    CHECK(fabsf(forward_U.V_left - 24.0f) < 0.02f);
+    irq(24.0f, 0.0f, 0.0f, 0U, 1000U, 640U);
+    expect_fault(POWER_FAULT_ADC);
+    CHECK(ADC2->ISR == (ADC_ISR_EOC | ADC_ISR_EOS | ADC_ISR_OVR));
+    for (unsigned mode = 2U; mode <= 4U; ++mode) {
+        start_running(mode, mode & 1U ? 24.0f : 12.0f, mode & 1U ? 12.0f : 36.0f);
+        irq(mode >= 3U ? 0.0f : 12.0f, mode >= 3U ? (mode & 1U ? 24.0f : 12.0f) : 0.0f,
+            0.0f, ADC_ISR_JEOS | ADC_ISR_JQOVF, 1000U, 640U);
+        expect_fault(POWER_FAULT_ADC);
+    }
+    puts("Main ADC: late forward Buck/STOP, early Boost/reverse qualification/run, unused ADC2 drain and consumed failures: PASS");
+}
+
+static void main_stop_and_clear_require_fresh_sample(void)
+{
+    for (unsigned mode = 2U; mode <= 4U; ++mode) {
+        const float source = mode & 1U ? 24.0f : 12.0f;
+        const float target = mode & 1U ? 12.0f : 36.0f;
+        start_running(mode, source, target);
+        next_input_flags = 0U;
+        period(mode >= 3U ? 0.0f : source, mode >= 3U ? source : 0.0f, 0.0f);
+        CHECK(Power_SamplesAreValid()); /* Active ADC1 is good; unused ADC2 was lost. */
+        stop();
+        CHECK(!Power_SamplesAreValid());
+        CHECK(!request(1U, 6.0f) && power_status.fault_detail == 2U);
+        clear_fault();
+        CHECK(!Power_SamplesAreValid());
+        period(24.0f, 0.0f, 0.0f);
+        CHECK(request(1U, 12.0f));
+        stop();
+    }
+    start_running(2U, 12.0f, 36.0f);
+    period(12.0f, 0.0f, 7.6f); expect_fault(POWER_FAULT_CURRENT);
+    period(12.0f, 0.0f, 0.0f); /* FAULT telemetry has a valid ADC1 phase. */
+    CHECK(Power_SamplesAreValid());
+    clear_fault();
+    CHECK(!request(1U, 6.0f) && power_status.fault_detail == 2U);
+    puts("Main STOP/clear: never qualify forward Buck from the preceding ADC1-only mode/fault sample: PASS");
+}
+
+int main(void)
+{
+    ADC_HandleTypeDef adc = {.Instance = ADC1};
+    HRTIM_HandleTypeDef timer = {HRTIM1};
+    RCC->APB2ENR = RCC_APB2ENR_HRTIM1EN;
+    before_call(); CHECK(Power_Init(&adc, &timer) == HAL_OK); after_call();
+    main_zero_requests();
+    main_readiness_policy();
+    main_four_modes_and_invalid_requests();
+    main_buck_limits_and_reachability();
+    main_mode_protection();
+    main_adc_mode_selection();
+    main_stop_and_clear_require_fresh_sample();
+    hardware_enable_interleavings();
+    adc_and_timing_faults();
+    late_input_init_failures();
+    return EXIT_SUCCESS;
+}
+#elif POWER_BENCH_24V_BUCK_TEST
 int main(void)
 {
     ADC_HandleTypeDef adc = {.Instance = ADC1};
@@ -1161,7 +1501,7 @@ int main(void)
     after_call();
     CHECK(power_status.protection_ready == 0U);
     CHECK(power_status.state == POWER_STOPPED && enabled_outputs == 0U);
-#if POWER_BENCH_LATE_INPUT_ADC
+#if POWER_LATE_INPUT_ADC
     late_input_sampling();
 #endif
 #if defined(POWER_UNIFIED_DIAGNOSTICS) && POWER_UNIFIED_DIAGNOSTICS

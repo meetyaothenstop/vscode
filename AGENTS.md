@@ -1,7 +1,14 @@
 # Working agreement
 
-- Maintain `MDK-ARM/bench12_buck_fast.uvprojx` as the single active test project.
-  The user asked to stop creating a new project for each debugging iteration.
+- Maintain the existing `MDK-ARM/bidreaction.uvprojx` as the main application
+  project, per the user's integration request (2026-10-29). Preserve forward
+  Boost and both reverse modes alongside optimized forward Buck.
+- Keep `MDK-ARM/bench12_buck_fast.uvprojx` as the sole restricted bench reference.
+  Do not create a new project for each debugging iteration.
+- The user operates firmware downloads. Prepare/build/verify and hand off the
+  firmware; do not control the computer or board to flash unless asked again.
+- Main currently uses explicitly authorized ADC software-protection testing;
+  never mark hardware OCP wiring or readiness verified without evidence.
 - Preserve history with Git commits/tags and concise test records. Existing
   historical project files are references; they share current source code.
 - GitHub SSH remote: `git@github.com:meetyaothenstop/vscode.git` (`origin`).

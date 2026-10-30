@@ -9,7 +9,19 @@ try {
     $fastCoreFlags = @('-DPOWER_BENCH_12V_BUCK_TEST=1','-DPOWER_TEST_SKIP_OLED_ACTIVE=1','-DPOWER_CCM_CONTROL=1','-DPOWER_BENCH_FAST_BUCK=1')
     $fastFlags = $fastCoreFlags + @('-DPOWER_BENCH_24V_BUCK_TEST=0')
     $bench24Flags = $fastCoreFlags + @('-DPOWER_BENCH_24V_BUCK_TEST=1')
+    $mainFlags = @('-DPOWER_MAIN_APPLICATION=1','-DPOWER_MAIN_ADC_SOFTWARE_ONLY=1')
     $cases = @(
+        @{Name='main_forward_test'; Sources=@('tests/main_forward_test.c','Core/Src/forward.c',$referenceObject); Flags=$mainFlags}
+        @{Name='main_power_control_test'; Sources=@('tests/power_control_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($mainFlags + @('-Itests/power_hal','-Wno-unused-function'))}
+        @{Name='main_power_guard_test'; Sources=@('tests/power_control_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=@('-DPOWER_MAIN_APPLICATION=1','-DPOWER_MAIN_ADC_SOFTWARE_ONLY=0','-Itests/power_hal','-Wno-unused-function')}
+        @{Name='main_menu_test'; Sources=@('tests/main_menu_test.c','Core/Src/power_menu.c'); Flags=$mainFlags}
+        @{Name='main_ui_test'; Sources=@('tests/main_ui_test.c','Core/Src/power_ui.c','Core/Src/power_menu.c'); Flags=$mainFlags}
+        @{Name='main_menu_guard_test'; Sources=@('tests/main_menu_test.c','Core/Src/power_menu.c'); Flags=@('-DPOWER_MAIN_APPLICATION=1','-DPOWER_MAIN_ADC_SOFTWARE_ONLY=0')}
+        @{Name='main_ui_guard_test'; Sources=@('tests/main_ui_test.c','Core/Src/power_ui.c','Core/Src/power_menu.c'); Flags=@('-DPOWER_MAIN_APPLICATION=1','-DPOWER_MAIN_ADC_SOFTWARE_ONLY=0')}
+        @{Name='main_oled_dma_test'; Sources=@('tests/oled_dma_test.c','Core/Src/OLED_IIC_Config.c'); Flags=$mainFlags}
+        @{Name='main_buck_switching_test'; Sources=@('tests/bench12_switching_test.c','Core/Src/forward.c','Core/Src/pwm_plan.c'); Flags=$mainFlags}
+        @{Name='main_boost_switching_test'; Sources=@('tests/pwm_switching_test.c','Core/Src/forward.c','Core/Src/pwm_plan.c'); Flags=$mainFlags}
+        @{Name='main_reverse_switching_test'; Sources=@('tests/reverse_switching_test.c','Core/Src/reverse.c','Core/Src/pwm_plan.c'); Flags=$mainFlags}
         @{Name='power_bench24_test'; Sources=@('tests/power_control_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($bench24Flags + @('-Itests/power_hal','-Wno-unused-function'))}
         @{Name='bench24_switching_test'; Sources=@('tests/bench12_switching_test.c','Core/Src/forward.c','Core/Src/pwm_plan.c'); Flags=$bench24Flags}
         @{Name='bench24_menu_test'; Sources=@('tests/bench12_menu_test.c','Core/Src/power_menu.c'); Flags=$bench24Flags}
