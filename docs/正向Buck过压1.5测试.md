@@ -1,5 +1,8 @@
 # 主工程正向Buck OVP1.5候选 — 2026-10-31
 
+> 本文保留未封顶1.5版本历史。用户后续要求超过40V的门限自动设为40V，当前实现见
+> [40V封顶测试](正向Buck过压40V封顶测试.md)；下文54V仅为旧策略记录。
+
 用户明确要求“将正向buck的过压保护转为1.5”。沿用`MDK-ARM/bidreaction.uvprojx`，
 Target`bidreaction`，下载文件`MDK-ARM/bidreaction/bidreaction.hex`，由用户操作下载。
 首页`MAIN ADC OVP1.5 6A`、参数页`M-OV1.5`，诊断宏0。

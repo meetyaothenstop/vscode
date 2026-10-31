@@ -1245,8 +1245,10 @@ static void main_forward_ovp15(void)
         {6.0f, 24.0f, 9.0f, 519U, 520U},
         {9.0f, 24.0f, 13.5f, 779U, 780U},
         {12.0f, 24.0f, 18.0f, 1039U, 1040U},
-        /* Policy test only:54V exceeds the reported50V capacitors. */
-        {36.0f, 40.0f, 54.0f, 3117U, 3118U},
+        {26.0f, 40.0f, 39.0f, 2251U, 2252U},
+        {27.0f, 40.0f, 40.0f, 2309U, 2310U},
+        {30.0f, 40.0f, 40.0f, 2309U, 2310U},
+        {36.0f, 40.0f, 40.0f, 2309U, 2310U},
     };
     for (unsigned n = 0U; n < sizeof(cases)/sizeof(cases[0]); ++n) {
         float below = cases[n].below * ADC_RIGHT_VOLTS_PER_COUNT;
@@ -1266,7 +1268,17 @@ static void main_forward_ovp15(void)
         CHECK(power_status.fault == POWER_FAULT_OUTPUT);
         CHECK(power_status.fault_raw_vl == cases[n].above);
     }
-    puts("Main forward OVP1.5: captured9V sample passes,6/9/12/36V adjacent codes trip once, immutable first fault: PASS");
+    /* Rejected/capped requests must not leave a40V threshold cached for a
+     * later low target, or apply the cap to the reverse output bus. */
+    start_running(1U, 24.0f, 9.0f);
+    period(24.0f, 780U * ADC_RIGHT_VOLTS_PER_COUNT, 0.0f);
+    expect_fault(POWER_FAULT_OUTPUT);
+    start_running(3U, 40.0f, 36.0f);
+    period(44.5f, 40.0f, 0.0f);
+    CHECK(power_status.fault == 0U); /* Reverse HOLD may disable gates. */
+    period(45.1f, 40.0f, 0.0f);
+    expect_fault(POWER_FAULT_OUTPUT);
+    puts("Main forward OVP:min(target*1.5,40V),26/27 crossover, raw2309/2310, low-target reset, reverse uncapped and immutable first fault: PASS");
 }
 
 static void main_mode_protection(void)
