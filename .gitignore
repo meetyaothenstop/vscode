@@ -51,6 +51,7 @@
 /.superpowers/phase-budget/*.disasm
 /.superpowers/phase-budget/*.log
 /tests/phase_budget_*.log
+/.superpowers/low-target/*.log
 
 # Do not accidentally commit credentials or local environment files
 .env
