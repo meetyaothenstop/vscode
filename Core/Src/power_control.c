@@ -435,6 +435,14 @@ int Power_RequestStart(unsigned mode, float target_volts)
 #endif
     float vin = reverse ? power_status.v_right : left;
     float vout = reverse ? left : power_status.v_right;
+    float start_current_limit = MODE_LIMIT(mode, START_CURRENT_LIMIT_AMPS);
+    float start_output_max = MODE_LIMIT(mode, START_OUTPUT_MAX_VOLTS);
+#if POWER_MAIN_APPLICATION
+    if (mode == 1U) {
+        start_current_limit = POWER_MAIN_FORWARD_BUCK_START_CURRENT_LIMIT_AMPS;
+        start_output_max = POWER_MAIN_FORWARD_BUCK_START_OUTPUT_MAX_VOLTS;
+    }
+#endif
     if (power_status.state != POWER_STOPPED || start_pending != 0U) DIAG_REQUEST_RETURN(0);
     power_status.protection_ready = (uint32_t)PowerProtection_IsReady();
     if (!power_status.protection_ready && !POWER_BENCH_12V_BUCK_TEST &&
@@ -458,9 +466,9 @@ int Power_RequestStart(unsigned mode, float target_volts)
             ) rejection = 2U;
     else if (!(target_volts >= 1.0f && target_volts <= MODE_LIMIT(mode, MAX_TARGET_VOLTS))) rejection = 3U;
     else if (!(vin >= MODE_LIMIT(mode, INPUT_MIN_VOLTS) && vin <= MODE_LIMIT(mode, INPUT_MAX_VOLTS))) rejection = 4U;
-    else if (!(fabsf(power_status.il) < MODE_LIMIT(mode, START_CURRENT_LIMIT_AMPS))) rejection = 5U;
+    else if (!(fabsf(power_status.il) < start_current_limit)) rejection = 5U;
     /* A charged output can drive reverse current at cold-start duty. */
-    else if (vout > MODE_LIMIT(mode, START_OUTPUT_MAX_VOLTS)) rejection = 6U;
+    else if (vout > start_output_max) rejection = 6U;
     else if ((boost && vin >= target_volts) || (!boost && vin <= target_volts)) rejection = 7U;
 #if POWER_MAIN_APPLICATION
     else if (mode == 1U && target_volts > vin * POWER_MAIN_BUCK_MAX_DUTY) rejection = 7U;
@@ -474,8 +482,8 @@ int Power_RequestStart(unsigned mode, float target_volts)
 #if POWER_MAIN_APPLICATION
     active_limits.INPUT_MIN_VOLTS = MODE_LIMIT(mode, INPUT_MIN_VOLTS);
     active_limits.INPUT_MAX_VOLTS = MODE_LIMIT(mode, INPUT_MAX_VOLTS);
-    active_limits.START_CURRENT_LIMIT_AMPS = MODE_LIMIT(mode, START_CURRENT_LIMIT_AMPS);
-    active_limits.START_OUTPUT_MAX_VOLTS = MODE_LIMIT(mode, START_OUTPUT_MAX_VOLTS);
+    active_limits.START_CURRENT_LIMIT_AMPS = start_current_limit;
+    active_limits.START_OUTPUT_MAX_VOLTS = start_output_max;
     active_limits.output_trip_volts = target_volts *
         (mode == 1U ? POWER_MAIN_FORWARD_BUCK_OUTPUT_OVERVOLTAGE_RATIO :
                       MODE_LIMIT(mode, OUTPUT_OVERVOLTAGE_RATIO));

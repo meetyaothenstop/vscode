@@ -177,7 +177,7 @@ static void test_zero_off_is_submitted_in_both_directions_and_fault(void)
         assert(starts == 1U && last_mode == (reverse ? 3U : 1U) && last_target == 0.0f);
         assert(!pending && power_status.state == POWER_STOPPED);
         settle();
-        assert(strstr(drawn.rows[4], "0 V") && strstr(drawn.rows[0], "BUCK M-15C40"));
+        assert(strstr(drawn.rows[4], "0 V") && strstr(drawn.rows[0], "BUCK M-S1A3V"));
         power_status.state = POWER_FAULT;
         power_status.fault = 8U;
         key(3);
@@ -194,7 +194,7 @@ static void test_running_frame_cadence_busy_stop_and_fault_restart(void)
     setup();
     service(0U);
 #if POWER_MAIN_ADC_SOFTWARE_ONLY
-    assert(strstr(drawn.rows[0], "MAIN ADC OVP1.5 C40"));
+    assert(strstr(drawn.rows[0], "MAIN ADC START1A 3V"));
 #else
     assert(strstr(drawn.rows[0], "MAIN HW GUARD 6A"));
 #endif
@@ -202,7 +202,7 @@ static void test_running_frame_cadence_busy_stop_and_fault_restart(void)
     pending = 0U;
     power_status.state = POWER_RUNNING;
     service(0U);
-    assert(strstr(drawn.rows[0], "FORWARD BUCK M-15C40"));
+    assert(strstr(drawn.rows[0], "FORWARD BUCK M-S1A3V"));
     assert(strstr(drawn.rows[6], "11.90 V"));
     assert(strstr(drawn.rows[7], "RUNNING") && last_page == 0U);
     unsigned before = clears;

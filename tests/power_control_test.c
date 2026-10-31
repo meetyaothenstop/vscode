@@ -1094,13 +1094,13 @@ static void main_zero_requests(void)
             }
         }
     }
-    stopped_samples(24.0f, 1.1f, 0.6f);
+    stopped_samples(24.0f, 3.1f, 1.1f);
     CHECK(request(1U, 0.0f)); /* Residual charge/current cannot block an OFF request. */
-    period(24.0f, 1.1f, 0.6f);
+    period(24.0f, 3.1f, 1.1f);
     CHECK(!request(1U, 12.0f) && power_status.fault_detail == 5U);
-    stopped_samples(24.0f, 1.1f, 0.0f);
+    stopped_samples(24.0f, 3.1f, 0.0f);
     CHECK(request(1U, 0.0f));
-    period(24.0f, 1.1f, 0.0f);
+    period(24.0f, 3.1f, 0.0f);
     CHECK(!request(1U, 12.0f) && power_status.fault_detail == 6U);
     puts("Main Buck zero: direct/mailbox, no samples, pending/bootstrap/arming/run/fault, no restart: PASS");
 }
@@ -1281,6 +1281,71 @@ static void main_forward_ovp15(void)
     puts("Main forward OVP:min(target*1.5,40V),26/27 crossover, raw2309/2310, low-target reset, reverse uncapped and immutable first fault: PASS");
 }
 
+static void main_forward_startup1a3v(void)
+{
+    /* Catch request/IRQ disagreement, stale cached mode limits, wrong boundary
+     * operators and accidental expansion to reverse/Boost/bench profiles. */
+    for (unsigned sign = 0U; sign < 2U; ++sign) {
+        const float current = sign ? -0.98f : 0.98f;
+        stopped_samples(36.0f, 2.99f, current);
+        CHECK(request(1U, 18.0f));
+        for (unsigned n = 0U; n < 33U; ++n) period(36.0f, 2.99f, current);
+        CHECK(power_status.state == POWER_RUNNING && !power_status.fault);
+    }
+    for (unsigned sign = 0U; sign < 2U; ++sign) {
+        stopped_samples(36.0f, 0.0f, 0.0f);
+        power_status.il = sign ? -1.0f : 1.0f;
+        CHECK(!request(1U, 18.0f) && power_status.fault_detail == 5U);
+    }
+    stopped_samples(36.0f, 0.0f, 0.0f);
+    power_status.v_right = 3.0f;
+    CHECK(request(1U, 18.0f));
+    stopped_samples(36.0f, 0.0f, 0.0f);
+    power_status.v_right = 3.001f;
+    CHECK(!request(1U, 18.0f) && power_status.fault_detail == 6U);
+
+    /* Hand-checked raw ADC neighbors: +1A is between3204/3205,
+     * -1A between2956/2957, and3V between173/174. */
+    const unsigned phases[] = {0U, 1U, 30U, 31U, 32U};
+    for (unsigned p = 0U; p < sizeof(phases) / sizeof(phases[0]); ++p) {
+        for (unsigned kind = 0U; kind < 2U; ++kind) {
+            stopped_samples(36.0f, 0.0f, 0.0f);
+            CHECK(request(1U, 18.0f));
+            for (unsigned n = 0U; n < phases[p]; ++n) period(36.0f, 0.0f, 0.0f);
+            period(36.0f, kind ? 174U * ADC_RIGHT_VOLTS_PER_COUNT : 0.0f,
+                   kind ? 0.0f : 3205U * ADC_CURRENT_AMPS_PER_COUNT - ADC_CURRENT_ZERO_AMPS);
+            expect_fault(POWER_FAULT_START);
+            CHECK(power_status.fault_detail == (kind ? 9U : 8U));
+            CHECK(HRTIM1->sCommonRegs.OENR == 0U);
+            CHECK(kind ? power_status.fault_raw_vl == 174U : power_status.fault_raw_il == 3205U);
+            const PowerStatus first = power_status;
+            period(36.0f, 0.0f, 0.0f); service();
+            CHECK(power_status.fault_detail == first.fault_detail);
+            CHECK(power_status.fault_raw_vl == first.fault_raw_vl &&
+                  power_status.fault_raw_il == first.fault_raw_il);
+        }
+    }
+    const unsigned accepted_current[] = {3204U, 2957U};
+    for (unsigned n = 0U; n < 2U; ++n) {
+        stopped_samples(36.0f, 0.0f, 0.0f);
+        CHECK(request(1U, 18.0f));
+        for (unsigned p = 0U; p < 33U; ++p)
+            period(36.0f, 173U * ADC_RIGHT_VOLTS_PER_COUNT,
+                   accepted_current[n] * ADC_CURRENT_AMPS_PER_COUNT - ADC_CURRENT_ZERO_AMPS);
+        CHECK(power_status.state == POWER_RUNNING && !power_status.fault);
+    }
+    /* Returning to reverse Buck must restore0.5A/1V, not cache mode1 limits. */
+    stopped_samples(0.0f, 36.0f, -0.75f);
+    CHECK(!request(3U, 18.0f) && power_status.fault_detail == 5U);
+    stopped_samples(2.0f, 36.0f, 0.0f);
+    CHECK(!request(3U, 18.0f) && power_status.fault_detail == 6U);
+    stopped_samples(12.0f, 0.0f, 0.3f);
+    CHECK(!request(2U, 36.0f) && power_status.fault_detail == 5U);
+    stopped_samples(12.0f, 0.3f, 0.0f);
+    CHECK(!request(2U, 36.0f) && power_status.fault_detail == 6U);
+    puts("Main forward startup:36->18V, |IL|<1A/output<=3V, request/IRQ raw edges, all cold phases, first fault and other-mode isolation: PASS");
+}
+
 static void main_mode_protection(void)
 {
     for (unsigned mode = 1U; mode <= 4U; ++mode) {
@@ -1294,7 +1359,7 @@ static void main_mode_protection(void)
             period(mode >= 3U ? residual : source, mode >= 3U ? source : residual, mode >= 3U ? -current : current);
         CHECK(power_status.state == POWER_RUNNING);
         stopped_samples(mode >= 3U ? 0.0f : source, mode >= 3U ? source : 0.0f, mode >= 3U ? -0.5f : 0.5f);
-        power_status.il = mode >= 3U ? -0.5f : 0.5f;
+        power_status.il = mode == 1U ? 1.0f : (mode >= 3U ? -0.5f : 0.5f);
         CHECK(!request(mode, target) && power_status.fault_detail == 5U);
         start_running(mode, source, target);
         const float threshold = mode == 1U ? 18.0f : (mode == 3U ? 15.0f : 39.6f);
@@ -1314,8 +1379,8 @@ static void main_mode_protection(void)
                 stopped_samples(mode == 1U ? 24.0f : 0.0f, mode == 1U ? 0.0f : 24.0f, 0.0f);
                 CHECK(request(mode, 12.0f));
                 for (unsigned k = 0; k < phases[p]; ++k) period(mode == 1U ? 24.0f : 0.0f, mode == 1U ? 0.0f : 24.0f, 0.0f);
-                period(mode == 1U ? 24.0f : stale_output[n], mode == 1U ? stale_output[n] : 24.0f,
-                       mode == 1U ? stale_current[n] : -stale_current[n]);
+                period(mode == 1U ? 24.0f : stale_output[n], mode == 1U ? (n ? 3.05f : 0.0f) : 24.0f,
+                       mode == 1U ? (n ? 0.0f : 1.05f) : -stale_current[n]);
                 expect_fault(POWER_FAULT_START);
                 CHECK(power_status.fault_detail == (n ? 9U : 8U) && HRTIM1->sCommonRegs.OENR == 0U);
             }
@@ -1544,6 +1609,7 @@ int main(void)
     main_four_modes_and_invalid_requests();
     main_buck_limits_and_reachability();
     main_forward_ovp15();
+    main_forward_startup1a3v();
     main_mode_protection();
     main_adc_mode_selection();
     main_stop_and_clear_require_fresh_sample();

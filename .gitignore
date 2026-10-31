@@ -56,6 +56,8 @@
 /.superpowers/main-forward-ovp15/*.disasm
 /.superpowers/main-forward-ovp40/*.log
 /.superpowers/main-forward-ovp40/*.disasm
+/.superpowers/start1a3v/*.log
+/.superpowers/start1a3v/*.disasm
 
 # Do not accidentally commit credentials or local environment files
 .env
