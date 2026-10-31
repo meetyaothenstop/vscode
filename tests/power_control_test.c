@@ -1234,6 +1234,41 @@ static void main_buck_limits_and_reachability(void)
     puts("Main Buck: nominal12/24/40, sampled10..42,36V, forward.95 reachability and every preparation sag: PASS");
 }
 
+static void main_forward_ovp15(void)
+{
+    /* Real backend replay: the user's9V/11.5719309V fault point is below
+     * the new13.5V line. This must not widen reverse/Boost protection. */
+    start_running(1U, 24.0f, 9.0f);
+    period(24.0f, 11.5719309f, -0.141685486f);
+    CHECK(power_status.state == POWER_RUNNING && power_status.fault == 0U);
+    static const struct { float target, source, trip; unsigned below, above; } cases[] = {
+        {6.0f, 24.0f, 9.0f, 519U, 520U},
+        {9.0f, 24.0f, 13.5f, 779U, 780U},
+        {12.0f, 24.0f, 18.0f, 1039U, 1040U},
+        /* Policy test only:54V exceeds the reported50V capacitors. */
+        {36.0f, 40.0f, 54.0f, 3117U, 3118U},
+    };
+    for (unsigned n = 0U; n < sizeof(cases)/sizeof(cases[0]); ++n) {
+        float below = cases[n].below * ADC_RIGHT_VOLTS_PER_COUNT;
+        float above = cases[n].above * ADC_RIGHT_VOLTS_PER_COUNT;
+        CHECK(below <= cases[n].trip && above > cases[n].trip);
+        start_running(1U, cases[n].source, cases[n].target);
+        period(cases[n].source, below, 0.0f);
+        CHECK(power_status.state == POWER_RUNNING && power_status.fault == 0U);
+        period(cases[n].source, above, 0.0f);
+        expect_fault(POWER_FAULT_OUTPUT);
+        CHECK(power_status.fault == POWER_FAULT_OUTPUT);
+        CHECK(power_status.fault_raw_vl == cases[n].above);
+        CHECK(fabsf(power_status.fault_v_right - above) < 0.00001f);
+        period(cases[n].source, 0.0f, 0.0f);
+        CHECK(power_status.fault_raw_vl == cases[n].above);
+        CHECK(request(1U, 0.0f));
+        CHECK(power_status.fault == POWER_FAULT_OUTPUT);
+        CHECK(power_status.fault_raw_vl == cases[n].above);
+    }
+    puts("Main forward OVP1.5: captured9V sample passes,6/9/12/36V adjacent codes trip once, immutable first fault: PASS");
+}
+
 static void main_mode_protection(void)
 {
     for (unsigned mode = 1U; mode <= 4U; ++mode) {
@@ -1250,7 +1285,7 @@ static void main_mode_protection(void)
         power_status.il = mode >= 3U ? -0.5f : 0.5f;
         CHECK(!request(mode, target) && power_status.fault_detail == 5U);
         start_running(mode, source, target);
-        const float threshold = mode & 1U ? 15.0f : 39.6f;
+        const float threshold = mode == 1U ? 18.0f : (mode == 3U ? 15.0f : 39.6f);
         const float gain = mode >= 3U ? ADC_LEFT_VOLTS_PER_COUNT : ADC_RIGHT_VOLTS_PER_COUNT;
         const float below = floorf(threshold / gain) * gain;
         period(mode >= 3U ? below : source, mode >= 3U ? source : below, 0.0f);
@@ -1290,7 +1325,7 @@ static void main_mode_protection(void)
     expect_fault(POWER_FAULT_CURRENT); CHECK(power_status.fault_raw_il == 4009U);
     CHECK(request(1U, 0.0f)); period(24.0f, 0.0f, 0.0f);
     CHECK(power_status.fault_raw_il == 4009U);
-    puts("Main mode protection: Buck.5A/1V/1.25x, Boost.25A/.25V/1.1x,6A reference vs7.5A sampled trip: PASS");
+    puts("Main mode protection: forward Buck1.5x/reverse Buck1.25x, Boost1.1x, cold limits and6A reference vs7.5A sampled trip: PASS");
 }
 
 static void main_adc_mode_selection(void)
@@ -1496,6 +1531,7 @@ int main(void)
     main_readiness_policy();
     main_four_modes_and_invalid_requests();
     main_buck_limits_and_reachability();
+    main_forward_ovp15();
     main_mode_protection();
     main_adc_mode_selection();
     main_stop_and_clear_require_fresh_sample();

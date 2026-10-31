@@ -476,7 +476,9 @@ int Power_RequestStart(unsigned mode, float target_volts)
     active_limits.INPUT_MAX_VOLTS = MODE_LIMIT(mode, INPUT_MAX_VOLTS);
     active_limits.START_CURRENT_LIMIT_AMPS = MODE_LIMIT(mode, START_CURRENT_LIMIT_AMPS);
     active_limits.START_OUTPUT_MAX_VOLTS = MODE_LIMIT(mode, START_OUTPUT_MAX_VOLTS);
-    active_limits.output_trip_volts = target_volts * MODE_LIMIT(mode, OUTPUT_OVERVOLTAGE_RATIO);
+    active_limits.output_trip_volts = target_volts *
+        (mode == 1U ? POWER_MAIN_FORWARD_BUCK_OUTPUT_OVERVOLTAGE_RATIO :
+                      MODE_LIMIT(mode, OUTPUT_OVERVOLTAGE_RATIO));
     /* Forward Buck candidate: reserve128 CPU clocks before the common
      * update, then require the postwrite checkpoint to leave64 clocks.
      * Other modes keep the160-clock write window and no new phase limit.

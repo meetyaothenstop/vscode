@@ -52,6 +52,8 @@
 /.superpowers/phase-budget/*.log
 /tests/phase_budget_*.log
 /.superpowers/low-target/*.log
+/.superpowers/main-forward-ovp15/*.log
+/.superpowers/main-forward-ovp15/*.disasm
 
 # Do not accidentally commit credentials or local environment files
 .env
