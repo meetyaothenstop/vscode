@@ -487,6 +487,9 @@ int Power_RequestStart(unsigned mode, float target_volts)
     active_limits.output_trip_volts = target_volts *
         (mode == 1U ? POWER_MAIN_FORWARD_BUCK_OUTPUT_OVERVOLTAGE_RATIO :
                       MODE_LIMIT(mode, OUTPUT_OVERVOLTAGE_RATIO));
+    if (mode == 1U && target_volts < POWER_MAIN_FORWARD_BUCK_OUTPUT_OVERVOLTAGE_MIN_VOLTS &&
+        active_limits.output_trip_volts < POWER_MAIN_FORWARD_BUCK_OUTPUT_OVERVOLTAGE_MIN_VOLTS)
+        active_limits.output_trip_volts = POWER_MAIN_FORWARD_BUCK_OUTPUT_OVERVOLTAGE_MIN_VOLTS;
     if (mode == 1U && active_limits.output_trip_volts >
         POWER_MAIN_FORWARD_BUCK_OUTPUT_OVERVOLTAGE_MAX_VOLTS)
         active_limits.output_trip_volts = POWER_MAIN_FORWARD_BUCK_OUTPUT_OVERVOLTAGE_MAX_VOLTS;

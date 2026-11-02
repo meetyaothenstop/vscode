@@ -1234,14 +1234,26 @@ static void main_buck_limits_and_reachability(void)
     puts("Main Buck: nominal12/24/40, sampled10..42,36V, forward.95 reachability and every preparation sag: PASS");
 }
 
-static void main_forward_ovp15(void)
+static void main_forward_ovp_bounds(void)
 {
+    /* Replay the12->3V fault sample:4.729247V must now pass the6V floor. */
+    start_running(1U, 12.0f, 3.0f);
+    period(12.0105734f, 4.72924709f, -0.0770206451f);
+    CHECK(power_status.state == POWER_RUNNING && power_status.fault == 0U);
     /* Real backend replay: the user's9V/11.5719309V fault point is below
      * the new13.5V line. This must not widen reverse/Boost protection. */
     start_running(1U, 24.0f, 9.0f);
     period(24.0f, 11.5719309f, -0.141685486f);
     CHECK(power_status.state == POWER_RUNNING && power_status.fault == 0U);
     static const struct { float target, source, trip; unsigned below, above; } cases[] = {
+        {1.0f, 12.0f, 6.0f, 346U, 347U},
+        {2.0f, 12.0f, 6.0f, 346U, 347U},
+        {3.0f, 12.0f, 6.0f, 346U, 347U},
+        {3.999f, 12.0f, 6.0f, 346U, 347U},
+        {4.0f, 12.0f, 6.0f, 346U, 347U},
+        {4.01f, 12.0f, 6.015f, 347U, 348U},
+        {5.0f, 12.0f, 7.5f, 432U, 433U},
+        {5.9f, 12.0f, 8.85f, 510U, 511U},
         {6.0f, 24.0f, 9.0f, 519U, 520U},
         {9.0f, 24.0f, 13.5f, 779U, 780U},
         {12.0f, 24.0f, 18.0f, 1039U, 1040U},
@@ -1268,6 +1280,12 @@ static void main_forward_ovp15(void)
         CHECK(power_status.fault == POWER_FAULT_OUTPUT);
         CHECK(power_status.fault_raw_vl == cases[n].above);
     }
+    /* A high-target cap must be replaced by the low-target floor. */
+    start_running(1U, 12.0f, 3.0f);
+    period(12.0f, 346U * ADC_RIGHT_VOLTS_PER_COUNT, 0.0f);
+    CHECK(power_status.fault == 0U);
+    period(12.0f, 347U * ADC_RIGHT_VOLTS_PER_COUNT, 0.0f);
+    expect_fault(POWER_FAULT_OUTPUT);
     /* Rejected/capped requests must not leave a40V threshold cached for a
      * later low target, or apply the cap to the reverse output bus. */
     start_running(1U, 24.0f, 9.0f);
@@ -1278,7 +1296,15 @@ static void main_forward_ovp15(void)
     CHECK(power_status.fault == 0U); /* Reverse HOLD may disable gates. */
     period(45.1f, 40.0f, 0.0f);
     expect_fault(POWER_FAULT_OUTPUT);
-    puts("Main forward OVP:min(target*1.5,40V),26/27 crossover, raw2309/2310, low-target reset, reverse uncapped and immutable first fault: PASS");
+    /* Reverse3V keeps3.75V, including after selecting the forward floor. */
+    start_running(1U, 12.0f, 3.0f);
+    stop();
+    start_running(3U, 12.0f, 3.0f);
+    period(213U * ADC_LEFT_VOLTS_PER_COUNT, 12.0f, 0.0f);
+    CHECK(power_status.fault == 0U);
+    period(214U * ADC_LEFT_VOLTS_PER_COUNT, 12.0f, 0.0f);
+    expect_fault(POWER_FAULT_OUTPUT);
+    puts("Main forward OVP:6V floor/1.5x/40V cap,3V fault replay,4V crossover, raw346/347, cache replacement, reverse unchanged and first fault: PASS");
 }
 
 static void main_forward_startup1a3v(void)
@@ -1608,7 +1634,7 @@ int main(void)
     main_readiness_policy();
     main_four_modes_and_invalid_requests();
     main_buck_limits_and_reachability();
-    main_forward_ovp15();
+    main_forward_ovp_bounds();
     main_forward_startup1a3v();
     main_mode_protection();
     main_adc_mode_selection();

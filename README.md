@@ -6,7 +6,17 @@ HEX为`MDK-ARM/bidreaction/bidreaction.hex`。保留正向Buck/Boost及反向Buc
 
 ## 当前版本
 
-2026-10-31：当前为**正向Buck启动1A/3V候选**，首页`MAIN ADC START1A 3V`、参数页`M-S1A3V`。
+2026-11-02：当前为**正向Buck过压6V下限、40V上限候选**，首页`MAIN ADC OVP6-40`、参数页`M-OV640`。
+用户要求目标低于6V时，原过压门限不足6V的提高到6V。仅MAIN正向Buck应用：
+`OVP=min(max(目标×1.5,6V),40V)`（有效非零目标）；1/2/3/4V目标均为6V，5V仍7.5V、6V仍9V。
+0V关断、启动1A/3V、反向Buck/Boost/台架、W128、PI/ADC/PWM和运行电流保护保持。
+47组主机回归及主/台架ARM6.18重建0错误0警告，实际HEX/CCM/无探针/DMA及AXF导出一致性核验通过。
+主HEX SHA256：`224F5F2F2EAB0CD0D2D38D150E1A4C800A3B06290E0E3A4A3D72EE80B7466D95`。
+本版未板测；本次只改变过压门限，未证明低目标过冲/采样根因修复。用户自行下载，见[6V下限记录](docs/正向Buck过压6V下限测试.md)。
+
+## 正向启动1A/3V版本历史
+
+2026-10-31：当时为**正向Buck启动1A/3V候选**，首页`MAIN ADC START1A 3V`、参数页`M-S1A3V`。
 用户在36V输入、18V目标报128 S8后要求放宽启动准备门限；仅MAIN正向Buck改为
 电流绝对值<1A、输出残压≤3V，启动请求及待启动/自举/上管开放前复查使用同一门限。
 反向Buck仍0.5A/1V，Boost仍0.25A/0.25V；准备时长、软启动初始参考0.1V、PI/ADC/PWM、
