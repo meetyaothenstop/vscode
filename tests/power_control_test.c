@@ -1610,24 +1610,32 @@ static void main_write_phase_budget(void)
         {1U, 792U, 27904U, 937U, 29088U, 0U, 5U}, /* DWT exit late. */
         {1U, 792U, 27232U, 850U, 29088U, 1U, 6U},
         {2U, 792U, 27232U, 850U, 29088U, 0U, 4U},
-        {3U, 792U, 27232U, 850U, 29088U, 0U, 4U},
+        {3U, 792U, 27232U, 850U, 29088U, 0U, 0U}, /* OPT1 first-control T4 capture under W128. */
         {4U, 792U, 27232U, 850U, 29088U, 0U, 4U},
         {2U, 792U, 26880U, 850U, 29088U, 0U, 0U},
         {2U, 792U, 26880U, 936U, 30592U, 0U, 0U}, /* Original inclusive DWT exit. */
         {3U, 792U, 26880U, 850U, 29088U, 0U, 0U},
         {3U, 840U, 26880U, 877U, 29952U, 0U, 0U},
+        {3U, 840U, 27904U, 877U, 29952U, 0U, 0U},
+        {3U, 792U, 27905U, 850U, 29088U, 0U, 4U},
+        {3U, 841U, 27905U, 850U, 29088U, 0U, 3U},
         {3U, 841U, 26880U, 877U, 29952U, 0U, 3U},
         {3U, 855U, 29248U, 900U, 30592U, 0U, 3U}, /* Actual first-control fault stays guarded. */
-        {3U, 792U, 26881U, 877U, 29952U, 0U, 4U},
+        {3U, 792U, 26881U, 877U, 29952U, 0U, 0U},
         {3U, 792U, 26880U, 877U, 29953U, 0U, 5U},
         {3U, 792U, 26880U, 937U, 29088U, 0U, 5U},
         {3U, 792U, 26880U, 850U, 29088U, 1U, 6U},
+        {3U, 792U, 27232U, 900U, 64U, 1U, 6U}, /* Low wrapped counter still needs REP check. */
         {4U, 792U, 26880U, 850U, 29088U, 0U, 0U},
+        {3U, 792U, 27904U, 877U, 29952U, 0U, 0U}, /* Restore Buck limit after Boost. */
         {1U, 792U, 27232U, 850U, 29088U, 0U, 0U}, /* Return to Buck. */
     };
     for (unsigned n = 0U; n < sizeof(cases)/sizeof(cases[0]); ++n) {
         unsigned mode = cases[n].mode;
-        unsigned captured_reverse = mode == 3U && cases[n].elapsed == 855U;
+        unsigned captured_reverse_t4 = mode == 3U && cases[n].elapsed == 792U &&
+            cases[n].phase == 27232U && cases[n].detail == 0U;
+        unsigned captured_reverse_t3 = mode == 3U && cases[n].elapsed == 855U;
+        unsigned captured_reverse = captured_reverse_t3 || captured_reverse_t4;
         float source = captured_reverse ? 12.0f : ((mode == 2U || mode == 4U) ? 12.0f : 24.0f);
         float target = captured_reverse ? 6.0f : ((mode == 2U || mode == 4U) ? 36.0f : 12.0f);
         float left = mode >= 3U ? 0.0f : source;
@@ -1649,17 +1657,22 @@ static void main_write_phase_budget(void)
         timing_event.write_counter = cases[n].phase;
         timing_event.exit_elapsed = cases[n].exit_elapsed;
         timing_event.exit_counter = cases[n].exit_phase;
-        irq(captured_reverse ? 2.47224951f : left,
+        irq(captured_reverse_t4 ? 0.0526010543f : (captured_reverse_t3 ? 2.47224951f : left),
             captured_reverse ? 11.9357195f : right,
-            captured_reverse ? 0.108888626f : 0.0f, ADC_ISR_JEOS, 1000U, 640U);
+            captured_reverse_t4 ? 0.0361404419f : (captured_reverse_t3 ? 0.108888626f : 0.0f),
+            ADC_ISR_JEOS, 1000U, 640U);
         timing_event.enabled = 0U;
         if (cases[n].detail == 0U) {
             CHECK(power_status.fault == 0U && power_status.state == POWER_RUNNING);
             CHECK(enabled_outputs == ALL_OUTPUTS);
             check_plan(mode);
+            if (captured_reverse_t4) {
+                CHECK(power_status.isr_cycles_max == 850U);
+                CHECK(power_status.left_compare == 28160U && power_status.right_compare == 0U);
+            }
         } else {
             expect_fault(POWER_FAULT_TIMING);
-            if (captured_reverse) {
+            if (captured_reverse_t3) {
                 CHECK(power_status.isr_cycles_max == 0U);
                 CHECK(fabsf(power_status.fault_v_left - 2.47224951f) < 0.02f);
             }

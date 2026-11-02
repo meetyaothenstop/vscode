@@ -488,12 +488,11 @@ int Power_RequestStart(unsigned mode, float target_volts)
     if ((mode == 1U || mode == 3U) && active_limits.output_trip_volts >
         POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_MAX_VOLTS)
         active_limits.output_trip_volts = POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_MAX_VOLTS;
-    /* Forward Buck candidate: reserve128 CPU clocks before the common
-     * update, then require the postwrite checkpoint to leave64 clocks.
-     * Reverse Buck keeps the earlier160-clock write deadline and gains the
-     * same64-clock absolute exit guard. Boost keeps its original limits.
+    /* MAIN Buck directions share the paired write path: reserve128 CPU
+     * clocks before the common update, then64 at the postwrite checkpoint.
+     * Boost keeps its160-clock write deadline and original exit phase.
      * DWT840/936 and pending-REP checks remain independent safeguards. */
-    active_limits.write_phase_limit_ticks = PWM_PERIOD_TICKS - (mode == 1U ? 4096U : 5120U);
+    active_limits.write_phase_limit_ticks = PWM_PERIOD_TICKS - ((mode == 1U || mode == 3U) ? 4096U : 5120U);
     active_limits.exit_phase_limit_ticks = (mode == 1U || mode == 3U) ? PWM_PERIOD_TICKS - 2048U : PWM_PERIOD_TICKS;
 #endif
     if (reverse) {
