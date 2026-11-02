@@ -71,8 +71,16 @@ static inline __attribute__((always_inline)) int PWM_ReversePlanImpl(float comma
 
 static inline __attribute__((always_inline)) int PWM_MakeReverseBuckCompares(float command, uint32_t *left, uint32_t *right)
 {
+    if (left == 0 || right == 0 || !(command >= 0.0f && command <= 1.0f)) return 0;
+    /* Same multiplication/comparison as the generic mapper. A null source
+     * pulse needs no floating-to-integer compare conversion at cold start. */
+    if (PWM_REFRESH_HIGH * command < 0.04f) {
+        *left = (uint32_t)(PWM_REFRESH_HIGH * PWM_PERIOD_TICKS + 0.5f) + PWM_DEADTIME_TICKS;
+        *right = 0U;
+        return 1;
+    }
     PwmPlan plan;
-    if (left == 0 || right == 0 || !PWM_ReversePlanImpl(command, 0, &plan)) return 0;
+    if (!PWM_ReversePlanImpl(command, 0, &plan)) return 0;
     *left = plan.left_compare;
     *right = plan.right_compare;
     return 1;

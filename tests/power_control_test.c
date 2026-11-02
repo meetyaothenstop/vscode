@@ -1617,6 +1617,7 @@ static void main_write_phase_budget(void)
         {3U, 792U, 26880U, 850U, 29088U, 0U, 0U},
         {3U, 840U, 26880U, 877U, 29952U, 0U, 0U},
         {3U, 841U, 26880U, 877U, 29952U, 0U, 3U},
+        {3U, 855U, 29248U, 900U, 30592U, 0U, 3U}, /* Actual first-control fault stays guarded. */
         {3U, 792U, 26881U, 877U, 29952U, 0U, 4U},
         {3U, 792U, 26880U, 877U, 29953U, 0U, 5U},
         {3U, 792U, 26880U, 937U, 29088U, 0U, 5U},
@@ -1626,11 +1627,12 @@ static void main_write_phase_budget(void)
     };
     for (unsigned n = 0U; n < sizeof(cases)/sizeof(cases[0]); ++n) {
         unsigned mode = cases[n].mode;
-        float source = (mode == 2U || mode == 4U) ? 12.0f : 24.0f;
-        float target = (mode == 2U || mode == 4U) ? 36.0f : 12.0f;
+        unsigned captured_reverse = mode == 3U && cases[n].elapsed == 855U;
+        float source = captured_reverse ? 12.0f : ((mode == 2U || mode == 4U) ? 12.0f : 24.0f);
+        float target = captured_reverse ? 6.0f : ((mode == 2U || mode == 4U) ? 36.0f : 12.0f);
         float left = mode >= 3U ? 0.0f : source;
         float right = mode >= 3U ? source : 0.0f;
-        if (n == 0U) {
+        if (n == 0U || captured_reverse) {
             stopped_samples(left, right, 0.0f);
             CHECK(request(mode, target));
             for (unsigned period_index = 0U; period_index < 32U; ++period_index)
@@ -1647,7 +1649,9 @@ static void main_write_phase_budget(void)
         timing_event.write_counter = cases[n].phase;
         timing_event.exit_elapsed = cases[n].exit_elapsed;
         timing_event.exit_counter = cases[n].exit_phase;
-        irq(left, right, 0.0f, ADC_ISR_JEOS, 1000U, 640U);
+        irq(captured_reverse ? 2.47224951f : left,
+            captured_reverse ? 11.9357195f : right,
+            captured_reverse ? 0.108888626f : 0.0f, ADC_ISR_JEOS, 1000U, 640U);
         timing_event.enabled = 0U;
         if (cases[n].detail == 0U) {
             CHECK(power_status.fault == 0U && power_status.state == POWER_RUNNING);
@@ -1655,6 +1659,10 @@ static void main_write_phase_budget(void)
             check_plan(mode);
         } else {
             expect_fault(POWER_FAULT_TIMING);
+            if (captured_reverse) {
+                CHECK(power_status.isr_cycles_max == 0U);
+                CHECK(fabsf(power_status.fault_v_left - 2.47224951f) < 0.02f);
+            }
             CHECK(power_status.fault_detail == cases[n].detail);
             CHECK(power_status.fault_spacing_cycles == 1000U);
             unsigned prewrite = cases[n].detail == 3U || cases[n].detail == 4U;

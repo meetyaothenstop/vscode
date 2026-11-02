@@ -9,6 +9,9 @@
  */
 #include "reverse.h"
 #include "power_build_config.h"
+#if POWER_MAIN_APPLICATION
+#include "reverse_main_buck.h"
+#endif
 #ifndef PLECS_HEADER_reverse_h_
 #error The wrong header file "reverse.h" was included. Please check your
 #error include path to see whether this file name conflicts with the name
@@ -141,8 +144,29 @@ void reverse_initialize(float time)
 #include "reverse_step_impl.inc"
 void reverse_step(void)
 {
-   if (reverse_U.mode == 3.0f) reverse_main_buck_step();
+   if (reverse_U.mode == 3.0f) {
+      if (reverse_errorStatus) return;
+      if (!(reverse_U.V_right > 0.0f) || !isfinite(reverse_U.V_right) ||
+          !isfinite(reverse_U.V_left) || !isfinite(reverse_U.IL)) {
+         reverse_errorStatus = "Invalid reverse controller input.";
+         memset(&reverse_Y, 0, sizeof(reverse_Y));
+         return;
+      }
+      reverse_main_buck_step();
+   }
    else reverse_main_full_step();
+}
+
+/* Only the already-qualified MAIN mode3 IRQ bypasses the public validation. */
+void reverse_main_buck_hold_step(void)
+{
+   float voltage_integral = reverse_X.Integrator_x;
+   reverse_X.DiscreteIntegrator1_i1_x = 0.0f;
+   reverse_X.DiscreteIntegrator1_i2_prevU = 0.0f;
+   reverse_main_buck_step();
+   reverse_X.Integrator_x = voltage_integral;
+   reverse_X.DiscreteIntegrator1_i1_x = 0.0f;
+   reverse_X.DiscreteIntegrator1_i2_prevU = 0.0f;
 }
 #else
 #define REVERSE_STEP_ATTRIBUTES

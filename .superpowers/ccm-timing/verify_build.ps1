@@ -30,6 +30,7 @@ if ($MainApplication) {
     }
     $hotSymbols += @('forward_main_buck_step','forward_main_full_step',
         'reverse_main_buck_step','reverse_main_full_step',
+        'reverse_main_buck_hold_step',
         'reverse_step','reverse_hold_step','reverse_prepare_resume')
 }
 foreach ($symbol in $hotSymbols) {

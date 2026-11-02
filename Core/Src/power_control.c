@@ -3,6 +3,9 @@
 #include "reverse.h"
 #include "power_protection.h"
 #include "power_build_config.h"
+#if POWER_MAIN_APPLICATION
+#include "reverse_main_buck.h"
+#endif
 #include <math.h>
 
 #define ALL_OUTPUTS (HRTIM_OUTPUT_TA1 | HRTIM_OUTPUT_TA2 | HRTIM_OUTPUT_TB1 | HRTIM_OUTPUT_TB2)
@@ -747,8 +750,18 @@ void Power_TimerIRQ(void)
         reverse_U.V_right = power_status.v_right;
         reverse_U.mode = (float)active_mode;
         if (resuming) reverse_prepare_resume(vout);
-        if (power_status.state == POWER_HOLD && !resuming) reverse_hold_step();
-        else reverse_step();
+#if POWER_MAIN_APPLICATION
+        /* All three values above came from the accepted ADC sequence. Input,
+         * output/current and startup protections have already run this IRQ. */
+        if (active_mode == 3U) {
+            if (power_status.state == POWER_HOLD && !resuming) reverse_main_buck_hold_step();
+            else reverse_main_buck_step();
+        } else
+#endif
+        {
+            if (power_status.state == POWER_HOLD && !resuming) reverse_hold_step();
+            else reverse_step();
+        }
         DIAG_CHECKPOINT(POWER_DIAG_CP_CONTROLLER);
         DIAG_STAGE(POWER_DIAG_STAGE_MAP);
         if (reverse_errorStatus ||

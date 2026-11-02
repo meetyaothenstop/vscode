@@ -1,4 +1,5 @@
 #include "reverse.h"
+#include "reverse_main_buck.h"
 #include <assert.h>
 #include <math.h>
 #include <stdint.h>
@@ -55,8 +56,41 @@ static void initialize_pair(unsigned mode, float source, float target)
     reference_reverse_U = reverse_U;
 }
 
+static void public_validation(void)
+{
+    const float invalid[] = {NAN, INFINITY, -INFINITY};
+    for (unsigned field = 0U; field < 3U; ++field) {
+        for (unsigned n = 0U; n < 3U; ++n) {
+            initialize_pair(3U, 12.0f, 6.0f);
+            if (field == 0U) reverse_U.V_right = invalid[n];
+            else if (field == 1U) reverse_U.V_left = invalid[n];
+            else reverse_U.IL = invalid[n];
+            reference_reverse_U = reverse_U;
+            reverse_step(); reference_reverse_step();
+            assert(reverse_errorStatus && reference_reverse_errorStatus);
+            assert(memcmp(&reverse_Y, &reference_reverse_Y, sizeof(reverse_Y)) == 0);
+            assert(reverse_Y.D_cm_R == 0.0f && !reverse_Y.EN_R_BUCK);
+        }
+    }
+    const float nonpositive[] = {0.0f, -1.0f};
+    for (unsigned n = 0U; n < 2U; ++n) {
+        initialize_pair(3U, 12.0f, 6.0f);
+        reverse_U.V_right = nonpositive[n]; reference_reverse_U = reverse_U;
+        reverse_step(); reference_reverse_step();
+        assert(reverse_errorStatus && reference_reverse_errorStatus);
+    }
+    initialize_pair(3U, 12.0f, 6.0f);
+    reverse_step(); reference_reverse_step();
+    reverse_U.mode = 0.0f; reference_reverse_U = reverse_U;
+    reverse_step(); reference_reverse_step();
+    assert(!reverse_errorStatus && !reference_reverse_errorStatus);
+    assert(memcmp(&reverse_Y, &reference_reverse_Y, sizeof(reverse_Y)) == 0);
+    assert(!reverse_Y.EN_R_BUCK && reverse_Y.D_cm_R == 0.0f);
+}
+
 int main(void)
 {
+    public_validation();
     /* Catches dispatch to the old full step rather than omitting Boost work. */
     initialize_pair(3U, 12.0f, 6.0f);
     reverse_step();
@@ -67,6 +101,7 @@ int main(void)
     const unsigned modes[] = {3U, 4U, 3U, 4U, 3U};
     const float sources[] = {12.0f, 12.0f, 24.0f, 24.0f, 40.0f};
     const float targets[] = {6.0f, 36.0f, 12.0f, 36.0f, 36.0f};
+    for (unsigned route = 0U; route < 2U; ++route) {
     for (unsigned run = 0U; run < 5U; ++run) {
         for (unsigned randomized = 0U; randomized < 2U; ++randomized) {
             initialize_pair(modes[run], sources[run], targets[run]);
@@ -81,14 +116,21 @@ int main(void)
                     reference_reverse_prepare_resume(reverse_U.V_left);
                 }
                 if (step >= 18000U && step < 20000U) {
-                    reverse_hold_step(); reference_reverse_hold_step();
-                } else { reverse_step(); reference_reverse_step(); }
+                    if (route && modes[run] == 3U) reverse_main_buck_hold_step();
+                    else reverse_hold_step();
+                    reference_reverse_hold_step();
+                } else {
+                    if (route && modes[run] == 3U) reverse_main_buck_step();
+                    else reverse_step();
+                    reference_reverse_step();
+                }
                 compare(modes[run]);
                 ++samples;
             }
         }
     }
-    puts("MAIN reverse Buck omits Boost-only states; full Boost, reinitialization, HOLD/resume and300000 bitwise samples: PASS");
-    assert(samples == 300000U);
+    }
+    puts("MAIN reverse public validation and protected direct path; Boost, reinitialization, HOLD/resume and600000 bitwise samples: PASS");
+    assert(samples == 600000U);
     return 0;
 }

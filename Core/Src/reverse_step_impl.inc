@@ -9,6 +9,16 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
    {
       return;
    }
+#if REVERSE_STEP_FAST_BUCK
+   /* MAIN backend contract: initialized mode3, finite fresh ADC inputs and
+    * right-input protection checked before this call. Public reverse_step()
+    * retains validation for callers outside that protected IRQ path. */
+   if (reverse_U.mode != 3.0f) {
+      reverse_errorStatus = "Restricted controller requires reverse Buck.";
+      memset(&reverse_Y, 0, sizeof(reverse_Y));
+      return;
+   }
+#else
    if (reverse_U.mode == 0.0f) {
       memset(&reverse_Y, 0, sizeof(reverse_Y));
       return;
@@ -21,12 +31,6 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
       return;
    }
 
-#if REVERSE_STEP_FAST_BUCK
-   if (reverse_U.mode != 3.0f) {
-      reverse_errorStatus = "Restricted controller requires reverse Buck.";
-      memset(&reverse_Y, 0, sizeof(reverse_Y));
-      return;
-   }
 #endif
 
    /* Integrator : 'reverse/Integrator' */

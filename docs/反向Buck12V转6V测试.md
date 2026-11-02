@@ -1,5 +1,8 @@
 # 主工程反向Buck12V→6V候选 — 2026-11-02
 
+本页记录87fe1b5。用户随后给出该轮64 T3首步超时截图，新的OPT1身份和固件指纹见
+[首步时序优化测试](反向Buck首步时序优化测试.md)。以下历史映像不作为当前版本。
+
 按用户要求，先准备右侧12V输入、左侧6V输出的反向Buck，保护参照当前正向Buck，重点检查时序。
 仍使用`MDK-ARM/bidreaction.uvprojx`、Target`bidreaction`；固件为
 `MDK-ARM/bidreaction/bidreaction.hex`。保留正向Buck/Boost及反向Boost，不新建工程。
