@@ -60,6 +60,8 @@
 /.superpowers/start1a3v/*.disasm
 /.superpowers/ovp-floor6/*.log
 /.superpowers/ovp-floor6/*.disasm
+/.superpowers/reverse12/*.log
+/.superpowers/reverse12/*.disasm
 
 # Do not accidentally commit credentials or local environment files
 .env

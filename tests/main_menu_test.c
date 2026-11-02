@@ -42,8 +42,8 @@ static void test_bounds_and_whole_volt_steps(void)
         setup(&menu, direction);
         assert(menu.settings[MENU_FORWARD].input_volts == 24U);
         assert(menu.settings[MENU_FORWARD].output_volts == 12U);
-        assert(menu.settings[MENU_REVERSE].input_volts == 36U);
-        assert(menu.settings[MENU_REVERSE].output_volts == 12U);
+        assert(menu.settings[MENU_REVERSE].input_volts == 12U);
+        assert(menu.settings[MENU_REVERSE].output_volts == 6U);
         edit(&menu, -100);
         assert(menu.settings[direction].input_volts == 12U);
         edit(&menu, 1);
@@ -76,20 +76,20 @@ static void test_identity_and_full_width_headers(void)
     assert(strstr(frame.rows[0], POWER_MAIN_ADC_SOFTWARE_ONLY ?
                   "MAIN ADC DIAG 6A" : "MAIN HW DIAG 6A"));
 #elif POWER_MAIN_ADC_SOFTWARE_ONLY
-    assert(strstr(frame.rows[0], "MAIN ADC OVP6-40"));
+    assert(strstr(frame.rows[0], "MAIN ADC RBUCK12-6"));
 #else
     assert(strstr(frame.rows[0], "MAIN HW GUARD 6A"));
 #endif
     press(&menu, MENU_KEY_OK);
     Menu_Render(&menu, &data, &frame);
-    assert(strstr(frame.rows[0], POWER_UNIFIED_DIAGNOSTICS ? "FORWARD BUCK M-DIAG" : "FORWARD BUCK M-OV640"));
+    assert(strstr(frame.rows[0], POWER_UNIFIED_DIAGNOSTICS ? "FORWARD BUCK M-DIAG" : "FORWARD BUCK M-RB126"));
     menu.settings[MENU_FORWARD] = (MenuSettings){12U, 36U};
     Menu_Render(&menu, &data, &frame);
-    assert(strstr(frame.rows[0], POWER_UNIFIED_DIAGNOSTICS ? "FORWARD BOOST M-DIAG" : "FORWARD BOOST M-OV640"));
+    assert(strstr(frame.rows[0], POWER_UNIFIED_DIAGNOSTICS ? "FORWARD BOOST M-DIAG" : "FORWARD BOOST M-RB126"));
     menu.direction = MENU_REVERSE;
     menu.settings[MENU_REVERSE] = (MenuSettings){36U, 36U};
     Menu_Render(&menu, &data, &frame);
-    assert(strstr(frame.rows[0], POWER_UNIFIED_DIAGNOSTICS ? "REVERSE EQUAL M-DIAG" : "REVERSE EQUAL M-OV640"));
+    assert(strstr(frame.rows[0], POWER_UNIFIED_DIAGNOSTICS ? "REVERSE EQUAL M-DIAG" : "REVERSE EQUAL M-RB126"));
     for (unsigned row = 0; row < MENU_ROWS; ++row)
         assert(strlen(frame.rows[row]) == MENU_COLUMNS);
 }
@@ -104,7 +104,7 @@ static void test_four_modes_equal_and_zero_off(void)
         press(&menu, MENU_KEY_UP); /* Start/stop selection. */
         MenuRequest request = press(&menu, MENU_KEY_OK);
         assert(request.action == MENU_ACTION_START && request.mode == MENU_MODE_BUCK);
-        assert(request.target_volts == 12.0f);
+        assert(request.target_volts == (direction == MENU_FORWARD ? 12.0f : 6.0f));
         menu.settings[direction] = (MenuSettings){12U, 36U};
         request = press(&menu, MENU_KEY_OK);
         assert(request.action == MENU_ACTION_START && request.mode == MENU_MODE_BOOST);

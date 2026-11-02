@@ -437,12 +437,6 @@ int Power_RequestStart(unsigned mode, float target_volts)
     float vout = reverse ? left : power_status.v_right;
     float start_current_limit = MODE_LIMIT(mode, START_CURRENT_LIMIT_AMPS);
     float start_output_max = MODE_LIMIT(mode, START_OUTPUT_MAX_VOLTS);
-#if POWER_MAIN_APPLICATION
-    if (mode == 1U) {
-        start_current_limit = POWER_MAIN_FORWARD_BUCK_START_CURRENT_LIMIT_AMPS;
-        start_output_max = POWER_MAIN_FORWARD_BUCK_START_OUTPUT_MAX_VOLTS;
-    }
-#endif
     if (power_status.state != POWER_STOPPED || start_pending != 0U) DIAG_REQUEST_RETURN(0);
     power_status.protection_ready = (uint32_t)PowerProtection_IsReady();
     if (!power_status.protection_ready && !POWER_BENCH_12V_BUCK_TEST &&
@@ -471,7 +465,7 @@ int Power_RequestStart(unsigned mode, float target_volts)
     else if (vout > start_output_max) rejection = 6U;
     else if ((boost && vin >= target_volts) || (!boost && vin <= target_volts)) rejection = 7U;
 #if POWER_MAIN_APPLICATION
-    else if (mode == 1U && target_volts > vin * POWER_MAIN_BUCK_MAX_DUTY) rejection = 7U;
+    else if ((mode == 1U || mode == 3U) && target_volts > vin * POWER_MAIN_BUCK_MAX_DUTY) rejection = 7U;
 #endif
     if (rejection) {
         trip_detail(POWER_FAULT_START, rejection);
@@ -484,21 +478,20 @@ int Power_RequestStart(unsigned mode, float target_volts)
     active_limits.INPUT_MAX_VOLTS = MODE_LIMIT(mode, INPUT_MAX_VOLTS);
     active_limits.START_CURRENT_LIMIT_AMPS = start_current_limit;
     active_limits.START_OUTPUT_MAX_VOLTS = start_output_max;
-    active_limits.output_trip_volts = target_volts *
-        (mode == 1U ? POWER_MAIN_FORWARD_BUCK_OUTPUT_OVERVOLTAGE_RATIO :
-                      MODE_LIMIT(mode, OUTPUT_OVERVOLTAGE_RATIO));
-    if (mode == 1U && target_volts < POWER_MAIN_FORWARD_BUCK_OUTPUT_OVERVOLTAGE_MIN_VOLTS &&
-        active_limits.output_trip_volts < POWER_MAIN_FORWARD_BUCK_OUTPUT_OVERVOLTAGE_MIN_VOLTS)
-        active_limits.output_trip_volts = POWER_MAIN_FORWARD_BUCK_OUTPUT_OVERVOLTAGE_MIN_VOLTS;
-    if (mode == 1U && active_limits.output_trip_volts >
-        POWER_MAIN_FORWARD_BUCK_OUTPUT_OVERVOLTAGE_MAX_VOLTS)
-        active_limits.output_trip_volts = POWER_MAIN_FORWARD_BUCK_OUTPUT_OVERVOLTAGE_MAX_VOLTS;
+    active_limits.output_trip_volts = target_volts * MODE_LIMIT(mode, OUTPUT_OVERVOLTAGE_RATIO);
+    if ((mode == 1U || mode == 3U) && target_volts < POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_MIN_VOLTS &&
+        active_limits.output_trip_volts < POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_MIN_VOLTS)
+        active_limits.output_trip_volts = POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_MIN_VOLTS;
+    if ((mode == 1U || mode == 3U) && active_limits.output_trip_volts >
+        POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_MAX_VOLTS)
+        active_limits.output_trip_volts = POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_MAX_VOLTS;
     /* Forward Buck candidate: reserve128 CPU clocks before the common
      * update, then require the postwrite checkpoint to leave64 clocks.
-     * Other modes keep the160-clock write window and no new phase limit.
+     * Reverse Buck keeps the earlier160-clock write deadline and gains the
+     * same64-clock absolute exit guard. Boost keeps its original limits.
      * DWT840/936 and pending-REP checks remain independent safeguards. */
     active_limits.write_phase_limit_ticks = PWM_PERIOD_TICKS - (mode == 1U ? 4096U : 5120U);
-    active_limits.exit_phase_limit_ticks = mode == 1U ? PWM_PERIOD_TICKS - 2048U : PWM_PERIOD_TICKS;
+    active_limits.exit_phase_limit_ticks = (mode == 1U || mode == 3U) ? PWM_PERIOD_TICKS - 2048U : PWM_PERIOD_TICKS;
 #endif
     if (reverse) {
         reverse_configure(boost ? vin : 0.1f, target_volts, POWER_CURRENT_REFERENCE_LIMIT);
@@ -669,7 +662,7 @@ void Power_TimerIRQ(void)
           vin <= IRQ_LIMIT(INPUT_MAX_VOLTS)))
         trip(POWER_FAULT_INPUT);
 #if POWER_MAIN_APPLICATION
-    if (active_mode == 1U && active_target > vin * POWER_MAIN_BUCK_MAX_DUTY)
+    if ((active_mode == 1U || active_mode == 3U) && active_target > vin * POWER_MAIN_BUCK_MAX_DUTY)
         trip(POWER_FAULT_INPUT);
 #endif
 #if POWER_MAIN_APPLICATION
@@ -758,8 +751,13 @@ void Power_TimerIRQ(void)
         else reverse_step();
         DIAG_CHECKPOINT(POWER_DIAG_CP_CONTROLLER);
         DIAG_STAGE(POWER_DIAG_STAGE_MAP);
-        if (reverse_errorStatus || !PWM_MakeReversePlan(reverse_Y.D_cm_R,
-                                                        reverse_Y.BOOST_RUN_R, &plan)) {
+        if (reverse_errorStatus ||
+#if POWER_MAIN_APPLICATION
+            !(active_mode == 3U ? PWM_MakeReverseBuckCompares(reverse_Y.D_cm_R, &plan.left_compare, &plan.right_compare) :
+              PWM_MakeReversePlan(reverse_Y.D_cm_R, reverse_Y.BOOST_RUN_R, &plan))) {
+#else
+            !PWM_MakeReversePlan(reverse_Y.D_cm_R, reverse_Y.BOOST_RUN_R, &plan)) {
+#endif
             trip(POWER_FAULT_CONTROLLER);
             DIAG_IRQ_RETURN();
         }

@@ -21,6 +21,11 @@ static void compare(float command)
     uint32_t left = 123U, right = 456U;
     assert(PWM_MakeBuckCompares(command, &left, &right) == expected);
     assert(left == generic.left_compare && right == generic.right_compare);
+    generic = (PwmPlan){0.123f, 0.456f, 123U, 456U};
+    expected = PWM_MakeReversePlan(command, 0, &generic);
+    left = 123U; right = 456U;
+    assert(PWM_MakeReverseBuckCompares(command, &left, &right) == expected);
+    assert(left == generic.left_compare && right == generic.right_compare);
 }
 
 int main(void)
@@ -43,6 +48,8 @@ int main(void)
     uint32_t unchanged = 777U;
     assert(!PWM_MakeBuckCompares(0.5f, NULL, &unchanged) && unchanged == 777U);
     assert(!PWM_MakeBuckCompares(0.5f, &unchanged, NULL) && unchanged == 777U);
-    puts("Buck specialized/generic mapper: 200k+ commands, null/min-pulse/upper boundary, NaN/inf, unchanged invalid outputs: PASS");
+    assert(!PWM_MakeReverseBuckCompares(0.5f, NULL, &unchanged) && unchanged == 777U);
+    assert(!PWM_MakeReverseBuckCompares(0.5f, &unchanged, NULL) && unchanged == 777U);
+    puts("Both Buck compare paths vs generic mappers:200k+ commands, null/min-pulse/upper boundary, NaN/inf and invalid outputs: PASS");
     return 0;
 }

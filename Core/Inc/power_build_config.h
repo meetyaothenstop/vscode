@@ -98,16 +98,12 @@
 #define POWER_MAIN_BUCK_INPUT_MIN_VOLTS        10.0f
 #define POWER_MAIN_BUCK_INPUT_MAX_VOLTS        42.0f
 #define POWER_MAIN_BUCK_MAX_TARGET_VOLTS       36.0f
-#define POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_RATIO 1.25f
-/* User-selected forward-only experiment; reverse Buck retains1.25. */
-#define POWER_MAIN_FORWARD_BUCK_OUTPUT_OVERVOLTAGE_RATIO 1.5f
-#define POWER_MAIN_FORWARD_BUCK_OUTPUT_OVERVOLTAGE_MIN_VOLTS 6.0f
-#define POWER_MAIN_FORWARD_BUCK_OUTPUT_OVERVOLTAGE_MAX_VOLTS 40.0f
-#define POWER_MAIN_BUCK_START_CURRENT_LIMIT_AMPS 0.5f
-#define POWER_MAIN_BUCK_START_OUTPUT_MAX_VOLTS   1.0f
-/* Forward-only cold-start limits; reverse Buck keeps the shared defaults. */
-#define POWER_MAIN_FORWARD_BUCK_START_CURRENT_LIMIT_AMPS 1.0f
-#define POWER_MAIN_FORWARD_BUCK_START_OUTPUT_MAX_VOLTS   3.0f
+/* MAIN Buck directions share the forward policy selected by the user. */
+#define POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_RATIO 1.5f
+#define POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_MIN_VOLTS 6.0f
+#define POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_MAX_VOLTS 40.0f
+#define POWER_MAIN_BUCK_START_CURRENT_LIMIT_AMPS 1.0f
+#define POWER_MAIN_BUCK_START_OUTPUT_MAX_VOLTS   3.0f
 #define POWER_MAIN_BUCK_MAX_DUTY                 0.95f
 
 /* User-selected cold-start acceptance for the new bench image only.

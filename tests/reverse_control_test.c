@@ -100,6 +100,7 @@ int main(void)
 {
     reference_limits_and_restart();
     mapping();
+    averaged_case(12, 6, 12, 3);
     averaged_case(12, 36, 36, 4);
     averaged_case(24, 12, 12, 3);
     averaged_case(36, 12, 12, 3);

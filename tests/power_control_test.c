@@ -1189,7 +1189,8 @@ static void main_buck_limits_and_reachability(void)
     power_status.v_left = 20.0f; CHECK(request(1U, 19.0f));
     stopped_samples(24.0f, 0.0f, 0.0f);
     power_status.v_left = 20.0f; CHECK(!request(1U, 19.001f) && power_status.fault_detail == 7U);
-    stopped_samples(0.0f, 24.0f, 0.0f); CHECK(request(3U, 23.5f)); /* Reverse retains strict<Vin policy. */
+    stopped_samples(0.0f, 24.0f, 0.0f); CHECK(request(3U, 22.0f));
+    stopped_samples(0.0f, 24.0f, 0.0f); CHECK(!request(3U, 23.5f) && power_status.fault_detail == 7U);
     stopped_samples(0.0f, 24.0f, 0.0f); CHECK(!request(3U, power_status.v_right));
     const unsigned phases[] = {0U, 1U, 30U, 31U, 32U, 33U};
     for (unsigned n = 0U; n < sizeof(phases) / sizeof(phases[0]); ++n) {
@@ -1292,19 +1293,19 @@ static void main_forward_ovp_bounds(void)
     period(24.0f, 780U * ADC_RIGHT_VOLTS_PER_COUNT, 0.0f);
     expect_fault(POWER_FAULT_OUTPUT);
     start_running(3U, 40.0f, 36.0f);
-    period(44.5f, 40.0f, 0.0f);
+    period(2281U * ADC_LEFT_VOLTS_PER_COUNT, 40.0f, 0.0f);
     CHECK(power_status.fault == 0U); /* Reverse HOLD may disable gates. */
-    period(45.1f, 40.0f, 0.0f);
+    period(2282U * ADC_LEFT_VOLTS_PER_COUNT, 40.0f, 0.0f);
     expect_fault(POWER_FAULT_OUTPUT);
-    /* Reverse3V keeps3.75V, including after selecting the forward floor. */
+    /* Reverse3V mirrors the6V floor, using its own left-bus ADC gain. */
     start_running(1U, 12.0f, 3.0f);
     stop();
     start_running(3U, 12.0f, 3.0f);
-    period(213U * ADC_LEFT_VOLTS_PER_COUNT, 12.0f, 0.0f);
+    period(342U * ADC_LEFT_VOLTS_PER_COUNT, 12.0f, 0.0f);
     CHECK(power_status.fault == 0U);
-    period(214U * ADC_LEFT_VOLTS_PER_COUNT, 12.0f, 0.0f);
+    period(343U * ADC_LEFT_VOLTS_PER_COUNT, 12.0f, 0.0f);
     expect_fault(POWER_FAULT_OUTPUT);
-    puts("Main forward OVP:6V floor/1.5x/40V cap,3V fault replay,4V crossover, raw346/347, cache replacement, reverse unchanged and first fault: PASS");
+    puts("Main Buck OVP:6V floor/1.5x/40V cap,3V fault replay,4V crossover, per-bus ADC edges, cache replacement and first fault: PASS");
 }
 
 static void main_forward_startup1a3v(void)
@@ -1360,16 +1361,64 @@ static void main_forward_startup1a3v(void)
                    accepted_current[n] * ADC_CURRENT_AMPS_PER_COUNT - ADC_CURRENT_ZERO_AMPS);
         CHECK(power_status.state == POWER_RUNNING && !power_status.fault);
     }
-    /* Returning to reverse Buck must restore0.5A/1V, not cache mode1 limits. */
-    stopped_samples(0.0f, 36.0f, -0.75f);
+    /* Reverse Buck now shares1A/3V; Boost must retain its original limits. */
+    stopped_samples(0.0f, 36.0f, -1.05f);
     CHECK(!request(3U, 18.0f) && power_status.fault_detail == 5U);
-    stopped_samples(2.0f, 36.0f, 0.0f);
+    stopped_samples(3.05f, 36.0f, 0.0f);
     CHECK(!request(3U, 18.0f) && power_status.fault_detail == 6U);
     stopped_samples(12.0f, 0.0f, 0.3f);
     CHECK(!request(2U, 36.0f) && power_status.fault_detail == 5U);
     stopped_samples(12.0f, 0.3f, 0.0f);
     CHECK(!request(2U, 36.0f) && power_status.fault_detail == 6U);
     puts("Main forward startup:36->18V, |IL|<1A/output<=3V, request/IRQ raw edges, all cold phases, first fault and other-mode isolation: PASS");
+}
+
+static void main_reverse_buck12(void)
+{
+    stopped_samples(2.99f, 12.0f, -0.98f);
+    CHECK(request(3U, 6.0f));
+    for (unsigned n = 0U; n < 33U; ++n) period(2.99f, 12.0f, -0.98f);
+    CHECK(power_status.state == POWER_RUNNING && reverse_Y.EN_R_BUCK && !reverse_Y.BOOST_RUN_R);
+    CHECK(power_status.left_compare == 28160U);
+    CHECK(power_status.v_reference >= 0.1f && power_status.v_reference < 0.11f);
+    start_running(3U, 12.0f, 6.0f);
+    period(513U * ADC_LEFT_VOLTS_PER_COUNT, 12.0f, -0.1f);
+    CHECK(power_status.fault == 0U);
+    period(514U * ADC_LEFT_VOLTS_PER_COUNT, 12.0f, -0.1f);
+    expect_fault(POWER_FAULT_OUTPUT);
+    CHECK(power_status.fault_raw_vh == 514U && power_status.fault_v_right > 11.9f);
+    const PowerStatus first = power_status;
+    period(0.0f, 12.0f, 0.0f); service();
+    CHECK(power_status.fault_raw_vh == first.fault_raw_vh);
+    CHECK(request(3U, 0.0f) && power_status.fault == POWER_FAULT_OUTPUT);
+    start_running(3U, 12.0f, 6.0f);
+    period(0.0f, 9.9f, 0.0f); expect_fault(POWER_FAULT_INPUT);
+    CHECK(fabsf(power_status.fault_input_volts - 9.9f) < 0.02f);
+    start_running(3U, 12.0f, 6.0f);
+    period(0.0f, 42.1f, 0.0f); expect_fault(POWER_FAULT_INPUT);
+    const unsigned prep[] = {0U, 1U, 30U, 31U, 32U};
+    for (unsigned p = 0U; p < 5U; ++p) {
+        for (unsigned kind = 0U; kind < 2U; ++kind) {
+            stopped_samples(0.0f, 12.0f, 0.0f); CHECK(request(3U, 6.0f));
+            for (unsigned n = 0U; n < prep[p]; ++n) period(0.0f, 12.0f, 0.0f);
+            period(kind ? 3.05f : 0.0f, 12.0f, kind ? 0.0f : -1.05f);
+            expect_fault(POWER_FAULT_START);
+            CHECK(power_status.fault_detail == (kind ? 9U : 8U));
+            CHECK(HRTIM1->sCommonRegs.OENR == 0U);
+        }
+    }
+    start_running(3U, 12.0f, 6.0f);
+    period(3.0f, 12.0f, 2153U * ADC_CURRENT_AMPS_PER_COUNT - ADC_CURRENT_ZERO_AMPS);
+    CHECK(power_status.fault == 0U);
+    period(3.0f, 12.0f, 2152U * ADC_CURRENT_AMPS_PER_COUNT - ADC_CURRENT_ZERO_AMPS);
+    expect_fault(POWER_FAULT_CURRENT);
+    CHECK(power_status.fault_raw_il == 2152U);
+    stopped_samples(0.0f, 12.0f, 0.0f);
+    power_target_volts = 6.0f; power_command = POWER_CMD_START_REVERSE_BUCK; service();
+    CHECK(Power_IsStartPending());
+    for (unsigned n = 0U; n < 33U; ++n) period(0.0f, 12.0f, 0.0f);
+    CHECK(power_status.state == POWER_RUNNING && reverse_U.mode == 3.0f);
+    puts("MAIN reverse12->6: right input10..42V, left OVP9V, startup1A/3V all stages, negative current7.5A, first fault and zero OFF: PASS");
 }
 
 static void main_mode_protection(void)
@@ -1385,10 +1434,10 @@ static void main_mode_protection(void)
             period(mode >= 3U ? residual : source, mode >= 3U ? source : residual, mode >= 3U ? -current : current);
         CHECK(power_status.state == POWER_RUNNING);
         stopped_samples(mode >= 3U ? 0.0f : source, mode >= 3U ? source : 0.0f, mode >= 3U ? -0.5f : 0.5f);
-        power_status.il = mode == 1U ? 1.0f : (mode >= 3U ? -0.5f : 0.5f);
+        power_status.il = mode == 1U ? 1.0f : (mode == 3U ? -1.0f : (mode >= 3U ? -0.5f : 0.5f));
         CHECK(!request(mode, target) && power_status.fault_detail == 5U);
         start_running(mode, source, target);
-        const float threshold = mode == 1U ? 18.0f : (mode == 3U ? 15.0f : 39.6f);
+        const float threshold = (mode == 1U || mode == 3U) ? 18.0f : 39.6f;
         const float gain = mode >= 3U ? ADC_LEFT_VOLTS_PER_COUNT : ADC_RIGHT_VOLTS_PER_COUNT;
         const float below = floorf(threshold / gain) * gain;
         period(mode >= 3U ? below : source, mode >= 3U ? source : below, 0.0f);
@@ -1396,8 +1445,8 @@ static void main_mode_protection(void)
         period(mode >= 3U ? below + gain : source, mode >= 3U ? source : below + gain, 0.0f);
         expect_fault(POWER_FAULT_OUTPUT);
     }
-    const float stale_output[] = {0.0f, 1.05f};
-    const float stale_current[] = {0.55f, 0.0f};
+    const float stale_output[] = {0.0f, 3.05f};
+    const float stale_current[] = {1.05f, 0.0f};
     for (unsigned mode = 1U; mode <= 3U; mode += 2U) {
         for (unsigned n = 0U; n < 2U; ++n) {
             const unsigned phases[] = {0U, 1U, 31U, 32U};
@@ -1428,7 +1477,7 @@ static void main_mode_protection(void)
     expect_fault(POWER_FAULT_CURRENT); CHECK(power_status.fault_raw_il == 4009U);
     CHECK(request(1U, 0.0f)); period(24.0f, 0.0f, 0.0f);
     CHECK(power_status.fault_raw_il == 4009U);
-    puts("Main mode protection: forward Buck1.5x/reverse Buck1.25x, Boost1.1x, cold limits and6A reference vs7.5A sampled trip: PASS");
+    puts("Main mode protection: both Buck1.5x with6..40V limits, Boost1.1x, cold limits and6A reference vs7.5A sampled trip: PASS");
 }
 
 static void main_adc_mode_selection(void)
@@ -1566,6 +1615,12 @@ static void main_write_phase_budget(void)
         {2U, 792U, 26880U, 850U, 29088U, 0U, 0U},
         {2U, 792U, 26880U, 936U, 30592U, 0U, 0U}, /* Original inclusive DWT exit. */
         {3U, 792U, 26880U, 850U, 29088U, 0U, 0U},
+        {3U, 840U, 26880U, 877U, 29952U, 0U, 0U},
+        {3U, 841U, 26880U, 877U, 29952U, 0U, 3U},
+        {3U, 792U, 26881U, 877U, 29952U, 0U, 4U},
+        {3U, 792U, 26880U, 877U, 29953U, 0U, 5U},
+        {3U, 792U, 26880U, 937U, 29088U, 0U, 5U},
+        {3U, 792U, 26880U, 850U, 29088U, 1U, 6U},
         {4U, 792U, 26880U, 850U, 29088U, 0U, 0U},
         {1U, 792U, 27232U, 850U, 29088U, 0U, 0U}, /* Return to Buck. */
     };
@@ -1636,6 +1691,7 @@ int main(void)
     main_buck_limits_and_reachability();
     main_forward_ovp_bounds();
     main_forward_startup1a3v();
+    main_reverse_buck12();
     main_mode_protection();
     main_adc_mode_selection();
     main_stop_and_clear_require_fresh_sample();

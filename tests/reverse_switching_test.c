@@ -87,6 +87,9 @@ static void run(double source, double target, double load, unsigned mode)
 
 int main(void)
 {
+    run(12, 6, 100, 3);
+    run(12, 6, 12, 3);
+    run(12, 6, 1000000, 3);
     run(12, 36, 36, 4);
     run(36, 12, 12, 3);
     run(24, 12, 12, 3);

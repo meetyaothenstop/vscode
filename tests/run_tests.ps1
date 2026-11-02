@@ -6,12 +6,17 @@ try {
     $renameFlags = @('configure','initialize','step','terminate','U','Y','B','X','errorStatus','sampleTime','checksum') | ForEach-Object { '-Dforward_' + $_ + '=reference_forward_' + $_ }
     & gcc -std=c11 -O2 -Wall -Wextra -Werror -ICore/Inc @renameFlags -c Core/Src/forward.c -o $referenceObject
     if ($LASTEXITCODE -ne 0) { throw 'Reference controller compile failed' }
+    $reverseReferenceObject = Join-Path $PSScriptRoot 'reverse_reference.o'
+    $reverseRenameFlags = @('configure','initialize','step','hold_step','prepare_resume','terminate','U','Y','B','X','errorStatus','sampleTime','checksum') | ForEach-Object { '-Dreverse_' + $_ + '=reference_reverse_' + $_ }
+    & gcc -std=c11 -O2 -Wall -Wextra -Werror -ICore/Inc @reverseRenameFlags -c Core/Src/reverse.c -o $reverseReferenceObject
+    if ($LASTEXITCODE -ne 0) { throw 'Reverse reference controller compile failed' }
     $fastCoreFlags = @('-DPOWER_BENCH_12V_BUCK_TEST=1','-DPOWER_TEST_SKIP_OLED_ACTIVE=1','-DPOWER_CCM_CONTROL=1','-DPOWER_BENCH_FAST_BUCK=1')
     $fastFlags = $fastCoreFlags + @('-DPOWER_BENCH_24V_BUCK_TEST=0')
     $bench24Flags = $fastCoreFlags + @('-DPOWER_BENCH_24V_BUCK_TEST=1')
     $mainFlags = @('-DPOWER_MAIN_APPLICATION=1','-DPOWER_MAIN_ADC_SOFTWARE_ONLY=1')
     $mainDiagFlags = $mainFlags + @('-DPOWER_UNIFIED_DIAGNOSTICS=1')
     $cases = @(
+        @{Name='main_reverse_test'; Sources=@('tests/main_reverse_test.c','Core/Src/reverse.c',$reverseReferenceObject); Flags=$mainFlags}
         @{Name='main_buck_plan_test'; Sources=@('tests/pwm_buck_plan_test.c','Core/Src/pwm_plan.c'); Flags=$mainFlags}
         @{Name='main_diag_power_test'; Sources=@('tests/power_control_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($mainDiagFlags + @('-Itests/power_hal','-Wno-unused-function'))}
         @{Name='main_diag_menu_test'; Sources=@('tests/main_menu_test.c','Core/Src/power_menu.c'); Flags=$mainDiagFlags}
