@@ -6,7 +6,19 @@ HEX为`MDK-ARM/bidreaction/bidreaction.hex`。保留正向Buck/Boost及反向Buc
 
 ## 当前版本
 
-2026-11-03：当前为**MAIN RAW1 整数快速路径候选**，首页`MAIN ADC RAW1 50/10`、参数页`M-RAW1`。
+2026-11-03：当前为**MAIN EVT1 故障阶段/前台进度诊断候选**，首页`MAIN ADC EVT1 50/10`、参数页`M-EVT1`。
+基于RAW1定位反向12→6V、100Ω的故障16及OLED停更，频率/PI/保护门限保持；不宣称已修复实板问题。
+Watch新增`power_event.fault`，关断后锁存原状态、自举/装载/恢复计数、指令，以及前台/UI入口和上次页面提交的时间。
+前台双缓冲发布不新增关中断区，正常快速IRQ/worker无新增事件探针；仍需用户自行下载板测。
+66组回归通过，主/台架ARM6.18重建0错误0警告，实际镜像/CCM/栈/DMA/AXF及快速指令检查通过；台架HEX指纹保持。
+主HEX SHA256：`C8BA5AD2686512F89992D31F3282BB414555903AF222EF9A37371D1B0515936B`。
+修改前9652d4b已用`pre-eventdiag-20261103`上传核对；版本标签`main-eventdiag1-20261103`。
+由用户下载原主工程HEX并加载配套AXF，按[EVT1测试说明](docs/EVT1故障定位测试.md)复测，故障后保留`power_status`及`power_event.fault`。
+启动准备期间mode/target可能是暂定配置；页面提交不等于物理显示完成，计时/现场解释限制见测试说明。
+
+## RAW1版本历史
+
+2026-11-03：当时为**MAIN RAW1 整数快速路径候选**，首页`MAIN ADC RAW1 50/10`、参数页`M-RAW1`。
 PWM、ADC及快速软件保护仍为150kHz，电流环50kHz、电压环10kHz。
 快速IRQ使用原始ADC整数区间及Q24脉冲密度累加，换算和浮点控制计算放在PendSV；原保护边界和T1..T7保留。
 增加正常快速路径峰值、worker启动等待、运行墙钟时间和观测到的快速IRQ C耗时字段，便于区分下一次T7的时间消耗。

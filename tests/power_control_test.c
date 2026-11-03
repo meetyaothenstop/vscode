@@ -33,6 +33,8 @@ CoreDebug_Type test_core_debug;
 DWT_Type test_dwt;
 SCB_Type test_scb;
 uint32_t test_primask;
+static uint32_t test_tick;
+uint32_t HAL_GetTick(void) {return test_tick;}
 static uint32_t enabled_outputs, active_left_compare, active_right_compare;
 static unsigned adc_channels[3], adc_config_count, counters_started;
 static unsigned protection_init_calls, protection_ready = 1U, protection_irq_masked;

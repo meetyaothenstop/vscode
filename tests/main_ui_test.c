@@ -4,6 +4,7 @@
 #include "power_build_config.h"
 #include "key.h"
 #include "OLED_Function.h"
+#include "power_event_diag.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -22,6 +23,15 @@ static float last_target;
 static int valid, accept;
 static uint8_t transport_allowed;
 static HAL_StatusTypeDef transport, submission;
+#if POWER_EVENT_DIAGNOSTICS
+static uint32_t event_last_stage,event_seen,event_entries;
+void PowerEvent_UIMark(uint32_t stage,uint32_t page,uint32_t status)
+{
+    (void)page;(void)status;
+    event_last_stage=stage;event_seen|=1U<<stage;
+    if(stage==POWER_EVENT_UI_ENTRY)++event_entries;
+}
+#endif
 
 uint32_t HAL_GetTick(void) { return tick; }
 void Key_Scan(void) { ++scans; }
@@ -177,7 +187,7 @@ static void test_zero_off_is_submitted_in_both_directions_and_fault(void)
         assert(starts == 1U && last_mode == (reverse ? 3U : 1U) && last_target == 0.0f);
         assert(!pending && power_status.state == POWER_STOPPED);
         settle();
-        assert(strstr(drawn.rows[4], "0 V") && strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? "BUCK M-RAW1" : "BUCK M-50/10") : "BUCK M-RRES1")));
+        assert(strstr(drawn.rows[4], "0 V") && strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? "BUCK M-EVT1" : "BUCK M-RAW1") : "BUCK M-50/10") : "BUCK M-RRES1")));
         power_status.state = POWER_FAULT;
         power_status.fault = 8U;
         key(3);
@@ -194,15 +204,15 @@ static void test_running_frame_cadence_busy_stop_and_fault_restart(void)
     setup();
     service(0U);
 #if POWER_MAIN_ADC_SOFTWARE_ONLY
-    assert(strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? "MAIN ADC RAW1 50/10" : "MAIN ADC I50 V10") : "MAIN ADC RBUCK RES1")));
+    assert(strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? "MAIN ADC EVT1 50/10" : "MAIN ADC RAW1 50/10") : "MAIN ADC I50 V10") : "MAIN ADC RBUCK RES1")));
 #else
-    assert(strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? "MAIN HW RAW1 50/10" : "MAIN HW I50 V10") : "MAIN HW GUARD 6A")));
+    assert(strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? "MAIN HW EVT1 50/10" : "MAIN HW RAW1 50/10") : "MAIN HW I50 V10") : "MAIN HW GUARD 6A")));
 #endif
     key(3); key(1); key(3);
     pending = 0U;
     power_status.state = POWER_RUNNING;
     service(0U);
-    assert(strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? "FORWARD BUCK M-RAW1" : "FORWARD BUCK M-50/10") : "FORWARD BUCK M-RRES1")));
+    assert(strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? "FORWARD BUCK M-EVT1" : "FORWARD BUCK M-RAW1") : "FORWARD BUCK M-50/10") : "FORWARD BUCK M-RRES1")));
     assert(strstr(drawn.rows[6], "11.90 V"));
     assert(strstr(drawn.rows[7], "RUNNING") && last_page == 0U);
     unsigned before = clears;
@@ -264,8 +274,25 @@ static void test_running_frame_cadence_busy_stop_and_fault_restart(void)
     assert(starts == old_starts && power_status.fault == 64U);
 }
 
+#if POWER_EVENT_DIAGNOSTICS
+static void test_event_progress_paths(void)
+{
+    setup();event_last_stage=event_seen=event_entries=0;
+    pending=1;service(0);
+    assert(event_last_stage==POWER_EVENT_UI_STARTUP_MUTED);
+    pending=0;power_status.state=POWER_RUNNING;transport=HAL_BUSY;service(0);
+    assert(event_last_stage==POWER_EVENT_UI_WAIT_DMA);
+    transport=HAL_OK;submission=HAL_ERROR;service(0);
+    assert(event_last_stage==POWER_EVENT_UI_IO_ERROR && event_entries==3);
+    assert(event_seen&(1U<<POWER_EVENT_UI_RENDER));
+    assert(event_seen&(1U<<POWER_EVENT_UI_SUBMIT_PAGE));
+}
+#endif
 int main(int argc, char **argv)
 {
+#if POWER_EVENT_DIAGNOSTICS
+    test_event_progress_paths();
+#endif
     if (argc == 1 || !strcmp(argv[1], "startup")) test_startup_always_mutes_before_any_page_submission();
     if (argc == 1 || !strcmp(argv[1], "actions")) test_all_four_ui_actions();
     if (argc == 1 || !strcmp(argv[1], "zero")) test_zero_off_is_submitted_in_both_directions_and_fault();

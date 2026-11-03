@@ -5,6 +5,7 @@
  * This header must precede Core/Inc on that executable's include path.
  * Other host test families use tests/stm32g4xx_hal.h. */
 #include <stdint.h>
+uint32_t HAL_GetTick(void);
 
 typedef enum { HAL_OK = 0, HAL_ERROR = 1, HAL_BUSY = 2, HAL_TIMEOUT = 3 } HAL_StatusTypeDef;
 typedef struct { volatile uint32_t ISR, JDR1, JDR2, JDR3, DR; } ADC_TypeDef;

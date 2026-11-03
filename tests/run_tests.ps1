@@ -19,6 +19,10 @@ try {
     $multirateFlags = @('-DPOWER_MAIN_APPLICATION=1','-DPOWER_MAIN_ADC_SOFTWARE_ONLY=1','-DPOWER_MULTIRATE_CONTROL=1')
     $mainDiagFlags = $mainFlags + @('-DPOWER_UNIFIED_DIAGNOSTICS=1')
     $cases = @(
+        @{Name='event_backend_test'; Sources=@('tests/event_backend_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function','-DPOWER_TEST_EVENT_PUBLISH=1'))}
+        @{Name='event_poststart_test'; Sources=@('tests/event_backend_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function','-DPOWER_TEST_EVENT_PUBLISH=1')); Args=@('1')}
+        @{Name='event_phase_test'; Sources=@('tests/event_backend_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function','-DPOWER_TEST_EVENT_PUBLISH=1')); Args=@('2')}
+        @{Name='event_page_test'; Sources=@('tests/event_backend_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function','-DPOWER_TEST_EVENT_PUBLISH=1')); Args=@('3')}
         @{Name='pwm_density_test'; Sources=@('tests/pwm_density_test.c')}
         @{Name='raw_pdm_test'; Sources=@('tests/raw_backend_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function','-DPOWER_TEST_RAW_INTERLEAVE=1')); Args=@('4')}
         @{Name='raw_diag_rejection_test'; Sources=@('tests/raw_backend_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function','-DPOWER_TEST_RAW_INTERLEAVE=1','-DPOWER_UNIFIED_DIAGNOSTICS=1')); Args=@('2')}

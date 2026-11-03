@@ -7,6 +7,7 @@
 #include "reverse_main_buck.h"
 #endif
 #include <math.h>
+#include "power_event_diag.h"
 #if POWER_RAW_FAST_IRQ
 #include "power_raw_policy.h"
 static RawPolicy raw_policy;
@@ -199,6 +200,9 @@ void Power_EmergencyOff(void)
 #if POWER_MULTIRATE_CONTROL
 static void control_cancel(void);
 #endif
+#if POWER_EVENT_DIAGNOSTICS
+#include "power_event_diag.inc"
+#endif
 
 #if POWER_RAW_FAST_IRQ
 static __attribute__((noinline)) void trip_record_sample(uint32_t fault,uint32_t detail,uint32_t elapsed,
@@ -212,6 +216,9 @@ static void trip_record(uint32_t fault,uint32_t detail,uint32_t elapsed,
     __disable_irq();
     Power_EmergencyOff();
     if (power_status.fault == 0U) {
+#if POWER_EVENT_DIAGNOSTICS
+        event_capture(fault,detail);
+#endif
 #if POWER_RAW_FAST_IRQ
         RawSnapshot sample=selected?*selected:(RawSnapshot){power_status.raw_vh,power_status.raw_vl,power_status.raw_il};
         raw_fault_convert(&sample);
@@ -337,6 +344,9 @@ void Power_ClearFault(void)
         power_status.fault_input_volts = 0.0f;
         power_status.fault_raw_vh = power_status.fault_raw_vl = power_status.fault_raw_il = 0U;
         power_status.state = POWER_STOPPED;
+#if POWER_EVENT_DIAGNOSTICS
+        power_event.fault=(PowerEventFault){0};
+#endif
 #if POWER_UNIFIED_DIAGNOSTICS
         power_diag.fault = (PowerDiagFault){0};
 #endif
@@ -407,6 +417,9 @@ HAL_StatusTypeDef Power_Init(ADC_HandleTypeDef *adc, HRTIM_HandleTypeDef *hrtim)
     HRTIM_ADCTriggerCfgTypeDef trigger = {0};
     HRTIM_CompareCfgTypeDef compare = {0};
     Power_EmergencyOff();
+#if POWER_EVENT_DIAGNOSTICS
+    event_init();
+#endif
 #if POWER_UNIFIED_DIAGNOSTICS
     power_diag = (PowerDiagnostics){0};
     diag_timer_active = 0U;
@@ -470,6 +483,9 @@ HAL_StatusTypeDef Power_Init(ADC_HandleTypeDef *adc, HRTIM_HandleTypeDef *hrtim)
     if (HAL_ADCEx_InjectedStart(adc) != HAL_OK) return HAL_ERROR;
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+#if POWER_EVENT_DIAGNOSTICS
+    power_event.clock_ready=1U;
+#endif
     cycle_budget = HAL_RCC_GetHCLKFreq() / PWM_FREQUENCY_HZ;
 #if POWER_MULTIRATE_CONTROL
     control_cancel();
@@ -632,6 +648,9 @@ int Power_RequestStart(unsigned mode, float target_volts)
         __set_PRIMASK(saved);
         DIAG_REQUEST_RETURN(0);
     }
+#if POWER_EVENT_DIAGNOSTICS
+    event_run_start();
+#endif
     __DMB();
     start_pending = 1U;
     __set_PRIMASK(saved);
@@ -640,6 +659,9 @@ int Power_RequestStart(unsigned mode, float target_volts)
 
 void Power_Service(AdcMeasurements *measurements)
 {
+#if POWER_EVENT_DIAGNOSTICS
+    event_foreground();
+#endif
     uint16_t vh, vl, il;
     uint32_t saved = __get_PRIMASK();
     __disable_irq();

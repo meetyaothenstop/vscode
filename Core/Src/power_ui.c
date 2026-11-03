@@ -4,6 +4,12 @@
 #include "power_build_config.h"
 #include "key.h"
 #include "OLED_Function.h"
+#include "power_event_diag.h"
+#if POWER_EVENT_DIAGNOSTICS
+#define EVENT_UI(stage,page,status) PowerEvent_UIMark((stage),(page),(uint32_t)(status))
+#else
+#define EVENT_UI(stage,page,status) ((void)0)
+#endif
 
 #define DISPLAY_PERIOD_MS 200U
 
@@ -70,6 +76,8 @@ static void sync_control_state(const MenuTelemetry *data)
 
 void PowerUI_Service(const AdcMeasurements *measurements)
 {
+    EVENT_UI(POWER_EVENT_UI_ENTRY,next_page,HAL_OK);
+    EVENT_UI(POWER_EVENT_UI_KEYS,next_page,HAL_OK);
     Key_Scan();
     uint8_t up = Key_IsPressed(KEY_ID_1);
     uint8_t down = Key_IsPressed(KEY_ID_2);
@@ -93,9 +101,14 @@ void PowerUI_Service(const AdcMeasurements *measurements)
 
 #if POWER_OLED_DMA
     uint8_t allow = (uint8_t)(!data.pending && data.state != MENU_STARTING);
+    EVENT_UI(POWER_EVENT_UI_POLL,next_page,HAL_OK);
     HAL_StatusTypeDef transfer = OLED_TransferPoll(allow);
-    if (transfer == HAL_BUSY) return;
+    if (transfer == HAL_BUSY) {
+        EVENT_UI(POWER_EVENT_UI_WAIT_DMA,next_page,transfer);
+        return;
+    }
     if (transfer != HAL_OK) {
+        EVENT_UI(POWER_EVENT_UI_IO_ERROR,next_page,transfer);
         display_failed = 1;
         next_page = MENU_ROWS;
         dirty = 1;
@@ -106,6 +119,7 @@ void PowerUI_Service(const AdcMeasurements *measurements)
          * command during startup, even when legacy OLED mute is disabled. */
         next_page = MENU_ROWS;
         dirty = 1;
+        EVENT_UI(POWER_EVENT_UI_STARTUP_MUTED,next_page,HAL_OK);
         return;
     }
 #endif
@@ -120,8 +134,12 @@ void PowerUI_Service(const AdcMeasurements *measurements)
     }
 #endif
     uint32_t now = HAL_GetTick();
-    if (display_failed && now - retry_tick < DISPLAY_PERIOD_MS) return;
+    if (display_failed && now - retry_tick < DISPLAY_PERIOD_MS) {
+        EVENT_UI(POWER_EVENT_UI_WAIT_REFRESH,next_page,HAL_OK);
+        return;
+    }
     if (next_page == MENU_ROWS && (dirty || now - frame_tick >= DISPLAY_PERIOD_MS)) {
+        EVENT_UI(POWER_EVENT_UI_RENDER,next_page,HAL_OK);
         Menu_Render(&menu, &data, &frame);
         OLED_ClearRAM();
         for (unsigned row = 0; row < MENU_ROWS; ++row)
@@ -129,18 +147,26 @@ void PowerUI_Service(const AdcMeasurements *measurements)
         next_page = 0;
         frame_tick = now;
         dirty = 0;
+        EVENT_UI(POWER_EVENT_UI_FRAME_READY,next_page,HAL_OK);
     }
     if (next_page < MENU_ROWS) {
+        EVENT_UI(POWER_EVENT_UI_SUBMIT_PAGE,next_page,HAL_OK);
         HAL_StatusTypeDef result = OLED_RefreshPage(next_page);
         if (result == HAL_OK) {
             ++next_page;
             display_failed = 0;
+            EVENT_UI(POWER_EVENT_UI_PAGE_QUEUED,next_page-1U,result);
         } else if (result != HAL_BUSY) {
+            EVENT_UI(POWER_EVENT_UI_IO_ERROR,next_page,result);
             /* An absent display never blocks key handling or power control. */
             display_failed = 1;
             retry_tick = now;
             next_page = MENU_ROWS;
             dirty = 1;
+        } else {
+            EVENT_UI(POWER_EVENT_UI_PAGE_BUSY,next_page,result);
         }
+    } else {
+        EVENT_UI(POWER_EVENT_UI_IDLE,next_page,HAL_OK);
     }
 }
