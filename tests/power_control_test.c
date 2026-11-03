@@ -89,7 +89,7 @@ HAL_StatusTypeDef HAL_ADC_Start(ADC_HandleTypeDef *adc)
  * first access belongs to irq()'s period advance, then begin/prewrite/exit.
  * No production timing hooks or controller substitutes are introduced. */
 static struct {
-    unsigned enabled, reads, pending;
+    unsigned enabled, reads, pending, exit_only;
     uint32_t begin, write_elapsed, write_counter, exit_elapsed, exit_counter;
 } timing_event;
 DWT_Type *test_dwt_access(void)
@@ -97,10 +97,10 @@ DWT_Type *test_dwt_access(void)
     if (timing_event.enabled) {
         unsigned read = timing_event.reads++;
         if (read == 1U) timing_event.begin = test_dwt.CYCCNT;
-        else if (read == 2U) {
+        else if (read == 2U && !timing_event.exit_only) {
             test_dwt.CYCCNT = timing_event.begin + timing_event.write_elapsed;
             HRTIM1->sTimerxRegs[TIMER_B].CNTxR = timing_event.write_counter;
-        } else if (read == 3U) {
+        } else if (read == (timing_event.exit_only ? 2U : 3U)) {
             test_dwt.CYCCNT = timing_event.begin + timing_event.exit_elapsed;
             HRTIM1->sTimerxRegs[TIMER_B].CNTxR = timing_event.exit_counter;
             if (timing_event.pending)
@@ -1421,6 +1421,94 @@ static void main_reverse_buck12(void)
     puts("MAIN reverse12->6: right input10..42V, left OVP9V, startup1A/3V all stages, negative current7.5A, first fault and zero OFF: PASS");
 }
 
+/* Catch a low-side enable stacked onto the late recovery calculation, a
+ * shortened bootstrap, or a stale recovery which can rearm after STOP/fault. */
+static void main_reverse_enter_hold(void)
+{
+    start_running(3U, 12.0f, 6.0f);
+    unsigned n;
+    for (n = 0U; n < 16000U && power_status.state != POWER_HOLD; ++n)
+        period(6.1f, 12.0f, 0.0f);
+    CHECK(power_status.state == POWER_HOLD && enabled_outputs == 0U);
+}
+
+static void main_reverse_prepare_resume(void)
+{
+    main_reverse_enter_hold();
+    period(4.38342094f, 11.9703655f, -0.0931873322f);
+    CHECK(power_status.state == POWER_BOOTSTRAP && power_status.fault == 0U);
+    CHECK(enabled_outputs == 0U && HRTIM1->sCommonRegs.OENR == 0U);
+    CHECK(fabsf(power_status.v_reference - power_status.v_left) < 0.00001f);
+}
+
+static void main_reverse_staged_resume(void)
+{
+    main_reverse_prepare_resume();
+    const float prepared_duty = power_status.d_cmd;
+    period(4.3f, 12.0f, 0.0f);
+    CHECK(power_status.state == POWER_BOOTSTRAP && enabled_outputs == LOW_OUTPUTS);
+    CHECK(power_status.d_cmd == prepared_duty); /* No second controller step. */
+    for (unsigned n = 0U; n < 29U; ++n) {
+        period(4.3f, 12.0f, 0.0f);
+        CHECK(power_status.state == POWER_BOOTSTRAP && enabled_outputs == LOW_OUTPUTS);
+    }
+    period(4.3f, 12.0f, 0.0f);
+    CHECK(power_status.state == POWER_ARMING && enabled_outputs == LOW_OUTPUTS);
+    check_plan(3U); /* Prepared compare pair survives the entire low interval. */
+    period(4.3f, 12.0f, 0.0f);
+    CHECK(power_status.state == POWER_ARMING && enabled_outputs == LOW_OUTPUTS);
+    CHECK(active_left_compare == power_status.left_compare &&
+          active_right_compare == power_status.right_compare);
+    period(4.3f, 12.0f, 0.0f);
+    CHECK(power_status.state == POWER_RUNNING && enabled_outputs == ALL_OUTPUTS);
+
+    /* A changed fresh sample cancels the pending enable without cold-start
+     * rejection of a legitimately charged HOLD output. Both current signs. */
+    for (unsigned kind = 0U; kind < 3U; ++kind) {
+        main_reverse_prepare_resume();
+        period(kind == 0U ? 6.0f : 4.3f, 12.0f,
+               kind == 1U ? 0.3f : (kind == 2U ? -0.3f : 0.0f));
+        CHECK(power_status.state == POWER_HOLD && power_status.fault == 0U);
+        CHECK(enabled_outputs == 0U && HRTIM1->sCommonRegs.OENR == 0U);
+        period(4.3f, 12.0f, 0.0f);
+        CHECK(power_status.state == POWER_BOOTSTRAP && enabled_outputs == 0U);
+        period(4.3f, 12.0f, 0.0f);
+        CHECK(power_status.state == POWER_BOOTSTRAP && enabled_outputs == LOW_OUTPUTS);
+    }
+    for (unsigned action = 0U; action < 3U; ++action) {
+        main_reverse_prepare_resume();
+        if (action == 0U) stop();
+        else if (action == 1U) CHECK(request(3U, 0.0f));
+        else clear_fault();
+        for (unsigned n = 0U; n < 35U; ++n) period(4.3f, 12.0f, 0.0f);
+        CHECK(power_status.state == POWER_STOPPED && enabled_outputs == 0U);
+        start_running(1U, 24.0f, 12.0f); /* Pending reverse work cannot leak modes. */
+    }
+    const uint32_t faults[] = {POWER_FAULT_ADC, POWER_FAULT_INPUT,
+                              POWER_FAULT_OUTPUT, POWER_FAULT_CURRENT};
+    for (unsigned kind = 0U; kind < 4U; ++kind) {
+        main_reverse_prepare_resume();
+        irq(kind == 2U ? 9.1f : 4.3f, kind == 1U ? 9.9f : 12.0f,
+            kind == 3U ? -7.6f : 0.0f, kind == 0U ? 0U : ADC_ISR_JEOS, 1000U, 640U);
+        expect_fault(faults[kind]);
+        CHECK(HRTIM1->sCommonRegs.OENR == 0U);
+        clear_fault();
+        for (unsigned n = 0U; n < 35U; ++n) period(4.3f, 12.0f, 0.0f);
+        CHECK(power_status.state == POWER_STOPPED && enabled_outputs == 0U);
+    }
+    for (unsigned poll = 1U; poll <= 2U; ++poll) {
+        main_reverse_prepare_resume();
+        protection_fault_after_safe_poll = poll;
+        period(4.3f, 12.0f, 0.0f);
+        CHECK(protection_fault_after_safe_poll == 0U);
+        expect_fault(POWER_FAULT_HARDWARE);
+        clear_fault();
+        period(4.3f, 12.0f, 0.0f);
+        CHECK(power_status.state == POWER_STOPPED && enabled_outputs == 0U);
+    }
+    puts("MAIN reverse HOLD: all-off staged prepare, fresh recheck,30+2 full intervals, saved pair, cancellation/faults and guarded enable: PASS");
+}
+
 static void main_mode_protection(void)
 {
     for (unsigned mode = 1U; mode <= 4U; ++mode) {
@@ -1593,6 +1681,55 @@ static void main_first_control_profile(void)
 #endif
 
 #if defined(POWER_TEST_TIMING)
+static void main_resume_exit_guards(void)
+{
+    static const struct {
+        uint32_t elapsed, phase;
+        unsigned pending, detail;
+    } cases[] = {
+        {907U, 31072U, 0U, 5U}, /* User's actual T5 remains rejected. */
+        {936U, 29952U, 0U, 0U},
+        {937U, 29088U, 0U, 5U},
+        {850U, 29953U, 0U, 5U},
+        {900U, 64U, 1U, 6U},
+        {937U, 29953U, 1U, 5U}, /* T5 wins over pending REP. */
+    };
+    for (unsigned phase = 0U; phase < 3U; ++phase) {
+        for (unsigned n = 0U; n < sizeof(cases)/sizeof(cases[0]); ++n) {
+            if (phase == 0U) main_reverse_enter_hold();
+            else main_reverse_prepare_resume();
+            timing_event.enabled = 1U;
+            timing_event.reads = 0U;
+            timing_event.pending = cases[n].pending;
+            timing_event.exit_only = phase != 0U;
+            timing_event.write_elapsed = 792U;
+            timing_event.write_counter = 27232U;
+            timing_event.exit_elapsed = cases[n].elapsed;
+            timing_event.exit_counter = cases[n].phase;
+            period(phase == 2U ? 6.0f : 4.38342094f, 11.9703655f, -0.0931873322f);
+            timing_event.enabled = timing_event.exit_only = 0U;
+            if (cases[n].detail) {
+                expect_fault(POWER_FAULT_TIMING);
+                CHECK(power_status.fault_detail == cases[n].detail);
+                CHECK(power_status.fault_elapsed_cycles == cases[n].elapsed);
+                CHECK(power_status.fault_counter_ticks == cases[n].phase);
+                if (phase != 1U) CHECK(HRTIM1->sCommonRegs.OENR == 0U);
+                const PowerStatus first = power_status;
+                period(0.0f, 12.0f, 0.0f);
+                CHECK(power_status.fault_counter_ticks == first.fault_counter_ticks);
+                clear_fault();
+                period(4.3f, 12.0f, 0.0f);
+                CHECK(power_status.state == POWER_STOPPED && enabled_outputs == 0U);
+            } else {
+                CHECK(power_status.fault == 0U);
+                CHECK(power_status.state == (phase == 2U ? POWER_HOLD : POWER_BOOTSTRAP));
+                CHECK(enabled_outputs == (phase == 1U ? LOW_OUTPUTS : 0U));
+            }
+        }
+    }
+    puts("MAIN reverse resume: prepare/early-enable/cancel all retain inclusive936/29952, T5/T6 priority and907/31072 rejection: PASS");
+}
+
 static void main_write_phase_budget(void)
 {
     /* Literal boundary fixtures catch over-broad widening, lost T3/T5/T6,
@@ -1713,11 +1850,13 @@ int main(void)
     main_forward_ovp_bounds();
     main_forward_startup1a3v();
     main_reverse_buck12();
+    main_reverse_staged_resume();
     main_mode_protection();
     main_adc_mode_selection();
     main_stop_and_clear_require_fresh_sample();
 #if defined(POWER_TEST_TIMING)
     main_write_phase_budget();
+    main_resume_exit_guards();
 #endif
 #if POWER_UNIFIED_DIAGNOSTICS
     main_first_control_profile();

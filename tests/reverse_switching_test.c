@@ -1,5 +1,6 @@
 #include "reverse.h"
 #include "pwm_plan.h"
+#include "power_build_config.h"
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
@@ -29,7 +30,10 @@ static void run(double source, double target, double load, unsigned mode)
         }
         if (holding && sampled_v < target * 0.99 && fabs(sampled_il) < 0.25) {
             holding = 0;
-            resume_cycles = 32;
+            /* MAIN mode3 adds one all-off preparation interval before the
+             * existing low-side bootstrap/arming pause. This ideal plant
+             * models the pause only; real enable sequencing is backend-tested. */
+            resume_cycles = (POWER_MAIN_APPLICATION && mode == 3) ? 33 : 32;
             reverse_prepare_resume((float)sampled_v);
             resuming = 1;
         }
