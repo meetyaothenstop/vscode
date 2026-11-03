@@ -61,7 +61,7 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
    else
    {
       reverse_B.DiscreteIntegrator3 = reverse_X.DiscreteIntegrator3_i1_x +
-                                      6.66666666666666665e-06f*
+                                      CONTROL_CURRENT_DT*
                                       reverse_X.DiscreteIntegrator3_i2_prevU;
    }
 
@@ -82,8 +82,8 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
    }
 
    /* Discrete Transfer Function : 'reverse/Discrete\nTransfer Fcn2' */
-   reverse_B.DiscreteTransferFcn2 = 0.0203698000000000004f*(reverse_U.V_left)+
-                                    0.0399097424959199976f*
+   reverse_B.DiscreteTransferFcn2 = CONTROL_PRECHARGE_B*(reverse_U.V_left)+
+                                    CONTROL_PRECHARGE_STATE*
                                     reverse_X.DiscreteTransferFcn2;
 
    /* Comparator : 'reverse/PRECHARGE_ACHED' */
@@ -103,7 +103,7 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
    else
    {
       reverse_B.DiscreteIntegrator4 = reverse_X.DiscreteIntegrator4_i1_x +
-                                      6.66666666666666665e-06f*
+                                      CONTROL_CURRENT_DT*
                                       reverse_X.DiscreteIntegrator4_i2_prevU;
    }
 
@@ -200,6 +200,18 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
       reverse_B.Saturation1 = 0.0f;
 
 #endif
+   unsigned voltage_step = 1U;
+#if POWER_MULTIRATE_CONTROL
+   voltage_step = reverse_voltage_phase == 0U;
+   reverse_voltage_phase = (reverse_voltage_phase + 1U) % 5U;
+   if (reverse_voltage_enabled != (unsigned)reverse_B.LogicalOperator18) {
+      voltage_step = 1U;
+      reverse_voltage_phase = 1U;
+   }
+   reverse_voltage_enabled = (unsigned)reverse_B.LogicalOperator18;
+   if (voltage_step) ++reverse_voltage_updates;
+#endif
+   if (voltage_step) {
    /* Product : 'reverse/Product3'
     * incorporates
     *  Sum : 'reverse/Sum'
@@ -207,8 +219,8 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
     */
    reverse_B.Product3 = ((float)reverse_B.LogicalOperator18) *
                         (reverse_B.Saturation4 -
-                         (0.0203698000000000004f*(reverse_U.V_left)+
-                          0.0399097424959199976f*
+                         (CONTROL_FILTER_B*(reverse_U.V_left)+
+                          CONTROL_FILTER_STATE*
                           reverse_X.DiscreteTransferFcn));
 
    /* Saturation : 'reverse/Saturation'
@@ -230,6 +242,8 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
    /* Gain : 'reverse/Gain2' */
    reverse_B.Gain2 = -1.f*reverse_B.Saturation;
 
+   }
+
    /* Discrete Integrator : 'reverse/Discrete\nIntegrator1' */
    if (reverse_X.DiscreteIntegrator1_first < 0 ||
        (!reverse_X.DiscreteIntegrator1_i3_prevReset &&
@@ -244,7 +258,7 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
    else
    {
       reverse_B.DiscreteIntegrator1 = reverse_X.DiscreteIntegrator1_i1_x +
-                                      6.66666666666666665e-06f*
+                                      CONTROL_CURRENT_DT*
                                       reverse_X.DiscreteIntegrator1_i2_prevU;
    }
 
@@ -265,7 +279,7 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
    else
    {
       reverse_B.DiscreteIntegrator5 = reverse_X.DiscreteIntegrator5_i1_x +
-                                      6.66666666666666665e-06f*
+                                      CONTROL_CURRENT_DT*
                                       reverse_X.DiscreteIntegrator5_i2_prevU;
    }
    if (reverse_B.DiscreteIntegrator5 > 1.f)
@@ -365,19 +379,22 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
    {
       float *buffer = &reverse_D_double[0];
       buffer[1*reverse_D_size_t[0] + 0] = (reverse_B.LogicalOperator);
-      reverse_D_size_t[0] = (reverse_D_size_t[0]+1) % 3;
+      reverse_D_size_t[0] = (reverse_D_size_t[0]+1) % CONTROL_DELAY_STEPS;
    }
 
 #endif
+   if (voltage_step) {
    /* Update for Discrete Transfer Function : 'reverse/Discrete\nTransfer Fcn'
     * incorporates
     *  Signal Inport : 'reverse/V_left'
     */
    {
       float newX;
-      newX = (reverse_U.V_left)+0.959260400000000013f*
+      newX = (reverse_U.V_left)+CONTROL_FILTER_A*
              reverse_X.DiscreteTransferFcn;
       reverse_X.DiscreteTransferFcn = newX;
+   }
+
    }
 
 #if !REVERSE_STEP_FAST_BUCK
@@ -387,7 +404,7 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
     */
    {
       float newX;
-      newX = (reverse_U.V_left)+0.959260400000000013f*
+      newX = (reverse_U.V_left)+CONTROL_PRECHARGE_A*
              reverse_X.DiscreteTransferFcn2;
       reverse_X.DiscreteTransferFcn2 = newX;
    }
@@ -423,6 +440,7 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
    reverse_X.DiscreteIntegrator5_i2_prevU = 100.f;
 
 #endif
+   if (voltage_step) {
    /* Derivatives for Integrator : 'reverse/Integrator'
     * incorporates
     *  Gain : 'reverse/Kiv'
@@ -433,7 +451,8 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
       0.0f : 10.0f*reverse_B.Product3;
 
    /* Update continuous states */
-   reverse_X.Integrator_x += 6.66666666666666665e-06f*reverse_deriv[0];
+   reverse_X.Integrator_x += CONTROL_VOLTAGE_DT*reverse_deriv[0];   }
+
 }
 
 #undef REVERSE_STEP_NAME

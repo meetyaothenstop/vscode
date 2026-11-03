@@ -12,6 +12,8 @@
 - Preserve history with Git commits/tags and concise test records. Existing
   historical project files are references; they share current source code.
 - GitHub SSH remote: `git@github.com:meetyaothenstop/vscode.git` (`origin`).
+  Before each substantial firmware refactor, preserve the previous source
+  baseline with a Git tag, push it, and verify its remote commit before editing.
   After each completed and verified new version or change, commit and push the
   current branch and any tags created for that version to GitHub. This is the
   user's standing authorization; do not wait for a separate upload request.

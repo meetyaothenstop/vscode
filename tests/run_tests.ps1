@@ -13,9 +13,18 @@ try {
     $fastCoreFlags = @('-DPOWER_BENCH_12V_BUCK_TEST=1','-DPOWER_TEST_SKIP_OLED_ACTIVE=1','-DPOWER_CCM_CONTROL=1','-DPOWER_BENCH_FAST_BUCK=1')
     $fastFlags = $fastCoreFlags + @('-DPOWER_BENCH_24V_BUCK_TEST=0')
     $bench24Flags = $fastCoreFlags + @('-DPOWER_BENCH_24V_BUCK_TEST=1')
-    $mainFlags = @('-DPOWER_MAIN_APPLICATION=1','-DPOWER_MAIN_ADC_SOFTWARE_ONLY=1')
+    # Historical reference tests keep the original150kHz execution contract.
+    # Actual MAIN multirate is exercised separately below with real controllers/backend.
+    $mainFlags = @('-DPOWER_MAIN_APPLICATION=1','-DPOWER_MAIN_ADC_SOFTWARE_ONLY=1','-DPOWER_MULTIRATE_CONTROL=0')
+    $multirateFlags = @('-DPOWER_MAIN_APPLICATION=1','-DPOWER_MAIN_ADC_SOFTWARE_ONLY=1','-DPOWER_MULTIRATE_CONTROL=1')
     $mainDiagFlags = $mainFlags + @('-DPOWER_UNIFIED_DIAGNOSTICS=1')
     $cases = @(
+        @{Name='multirate_controller_test'; Sources=@('tests/multirate_controller_test.c','Core/Src/forward.c','Core/Src/reverse.c'); Flags=$multirateFlags}
+        @{Name='multirate_menu_test'; Sources=@('tests/main_menu_test.c','Core/Src/power_menu.c'); Flags=$multirateFlags}
+        @{Name='multirate_ui_test'; Sources=@('tests/main_ui_test.c','Core/Src/power_ui.c','Core/Src/power_menu.c'); Flags=$multirateFlags}
+        @{Name='multirate_backend_test'; Sources=@('tests/multirate_backend_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function'))}
+        @{Name='multirate_preempt_test'; Sources=@('tests/multirate_backend_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function','-DPOWER_TEST_WORKER_PREEMPT=1'))}
+        @{Name='multirate_switching_test'; Sources=@('tests/multirate_switching_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function','-DEXTENDED_PLANT=1'))}
         @{Name='main_reverse_test'; Sources=@('tests/main_reverse_test.c','Core/Src/reverse.c',$reverseReferenceObject); Flags=$mainFlags}
         @{Name='main_buck_plan_test'; Sources=@('tests/pwm_buck_plan_test.c','Core/Src/pwm_plan.c'); Flags=$mainFlags}
         @{Name='main_diag_power_test'; Sources=@('tests/power_control_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($mainDiagFlags + @('-Itests/power_hal','-Wno-unused-function'))}
@@ -23,7 +32,7 @@ try {
         @{Name='main_forward_test'; Sources=@('tests/main_forward_test.c','Core/Src/forward.c',$referenceObject); Flags=$mainFlags}
         @{Name='main_power_control_test'; Sources=@('tests/power_control_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($mainFlags + @('-Itests/power_hal','-Wno-unused-function'))}
         @{Name='main_phase_budget_test'; Sources=@('tests/power_control_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($mainFlags + @('-Itests/power_hal','-Wno-unused-function','-DPOWER_TEST_TIMING=1'))}
-        @{Name='main_power_guard_test'; Sources=@('tests/power_control_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=@('-DPOWER_MAIN_APPLICATION=1','-DPOWER_MAIN_ADC_SOFTWARE_ONLY=0','-Itests/power_hal','-Wno-unused-function')}
+        @{Name='main_power_guard_test'; Sources=@('tests/power_control_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=@('-DPOWER_MAIN_APPLICATION=1','-DPOWER_MAIN_ADC_SOFTWARE_ONLY=0','-DPOWER_MULTIRATE_CONTROL=0','-Itests/power_hal','-Wno-unused-function')}
         @{Name='main_menu_test'; Sources=@('tests/main_menu_test.c','Core/Src/power_menu.c'); Flags=$mainFlags}
         @{Name='main_ui_test'; Sources=@('tests/main_ui_test.c','Core/Src/power_ui.c','Core/Src/power_menu.c'); Flags=$mainFlags}
         @{Name='main_menu_guard_test'; Sources=@('tests/main_menu_test.c','Core/Src/power_menu.c'); Flags=@('-DPOWER_MAIN_APPLICATION=1','-DPOWER_MAIN_ADC_SOFTWARE_ONLY=0')}

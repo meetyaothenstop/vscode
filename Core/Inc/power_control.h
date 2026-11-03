@@ -4,6 +4,7 @@
 #include "adc_measure.h"
 #include "pwm_plan.h"
 #include "power_build_config.h"
+#include "control_rates.h"
 
 typedef enum {
     POWER_STOPPED, POWER_BOOTSTRAP, POWER_ARMING, POWER_RUNNING, POWER_FAULT,
@@ -37,6 +38,10 @@ typedef struct {
     uint32_t fault_elapsed_cycles, fault_spacing_cycles, fault_counter_ticks;
     float fault_v_left, fault_v_right, fault_il, fault_input_volts;
     uint16_t fault_raw_vh, fault_raw_vl, fault_raw_il;
+#if POWER_MULTIRATE_CONTROL
+    /* MAIN multirate worker counts and wall-clock latency (includes preemption). */
+    uint32_t control_steps, voltage_steps, control_cycles_max;
+#endif
 } PowerStatus;
 
 #if POWER_UNIFIED_DIAGNOSTICS
@@ -102,6 +107,7 @@ int Power_IsStartPending(void);
 int Power_SamplesAreValid(void);
 void Power_Service(AdcMeasurements *measurements);
 void Power_TimerIRQ(void);
+void Power_ControlIRQ(void); /* MAIN: preemptible lowest-priority PendSV worker. */
 void Power_FaultIRQ(void);
 /* May be called from fatal handlers. Does not require HAL handle state. */
 void Power_EmergencyOff(void);

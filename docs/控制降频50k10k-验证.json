@@ -1,0 +1,47 @@
+{
+  "date": "2026-11-03",
+  "branch": "codex/main-buck",
+  "tag": "main-control-50k10k-20261103",
+  "baseline": "32a9bc8cb93201b7f3ef34309ce2cdc2c8236360",
+  "backup_tag": "pre-control-multirate-20261103",
+  "project": "MDK-ARM/bidreaction.uvprojx",
+  "identity": [
+    "MAIN ADC I50 V10",
+    "M-50/10"
+  ],
+  "pwm_hz": 150000,
+  "fast_adc_protection_hz": 150000,
+  "current_hz": 50000,
+  "voltage_hz": 10000,
+  "main_stack_bytes": 2048,
+  "host_groups": 54,
+  "nominal_switched_plant_cases": 13,
+  "build_errors_warnings": [
+    0,
+    0
+  ],
+  "main_size": {
+    "code": 49728,
+    "ro": 1320,
+    "rw": 44,
+    "zi": 5708
+  },
+  "ccm": {
+    "bytes": 11064,
+    "run": "0x10000000",
+    "load": "0x08009C30"
+  },
+  "hex_sha256": "1D767D9282D392B51A1EA41DE3E50D6C1FE95E753D5AE6E6FCF631C25E71FE43",
+  "axf_sha256": "B33B6F3EE63C0FC2975746E649EA07E93ED0D12A76D6019CD6CF4B48CE7E1047",
+  "bench_hex_sha256": "A9BA257BA3FFBB49C8FAED9803E3462671F692A9B4D063C9975512D09EF6D451",
+  "bench_hex_unchanged": true,
+  "actual_hex_vector_ccm_copy_dma_and_axf_verified": true,
+  "independent_read_only_review": true,
+  "review_p1_fixes_red_green": [
+    "minimum_three_complete_boost_off_periods_with_variable_worker_latency",
+    "main_2k_stack_actual_image_check"
+  ],
+  "board_actions": "None; build only. User downloads.",
+  "board_timing_stability_verified": false,
+  "hardware_ocp_wiring_verified": false
+}

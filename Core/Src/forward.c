@@ -8,6 +8,7 @@
  */
 #include "forward.h"
 #include "power_build_config.h"
+#include "control_rates.h"
 #ifndef PLECS_HEADER_forward_h_
 #error The wrong header file "forward.h" was included. Please check your
 #error include path to see whether this file name conflicts with the name
@@ -53,7 +54,11 @@ forward_BlockOutputs forward_B;
 forward_ModelStates forward_X _ALIGN;
 const char * forward_errorStatus;
 static forward_Parameters forward_P = {12.0f, 36.0f, 6.0f};
-const float forward_sampleTime = 6.66666666666666665e-06f;
+const float forward_sampleTime = CONTROL_CURRENT_DT;
+#if POWER_MULTIRATE_CONTROL
+static unsigned forward_voltage_phase, forward_voltage_enabled;
+unsigned forward_voltage_updates;
+#endif
 const char * const forward_checksum =
    "2eafec47fb68d388383447afbafc9e3b3aea0681";
 void forward_configure(float start_volts, float target_volts, float current_limit)
@@ -66,6 +71,9 @@ void forward_initialize(float time)
 {
    float remainder;
    forward_errorStatus = NULL;
+#if POWER_MULTIRATE_CONTROL
+   forward_voltage_phase = forward_voltage_enabled = forward_voltage_updates = 0U;
+#endif
    forward_tickHi = floorf(time/(4294967296.0f*forward_sampleTime));
    remainder = time - forward_tickHi*4294967296.0f*forward_sampleTime;
    forward_tickLo = floorf(remainder/forward_sampleTime + .5f);

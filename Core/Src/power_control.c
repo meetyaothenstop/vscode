@@ -178,6 +178,10 @@ void Power_EmergencyOff(void)
         HRTIM1->sCommonRegs.ODISR = ALL_OUTPUTS;
 }
 
+#if POWER_MULTIRATE_CONTROL
+static void control_cancel(void);
+#endif
+
 static void trip_record(uint32_t fault, uint32_t detail, uint32_t elapsed,
                         uint32_t spacing, uint32_t counter)
 {
@@ -206,6 +210,9 @@ static void trip_record(uint32_t fault, uint32_t detail, uint32_t elapsed,
     power_status.fault |= fault;
     power_status.state = POWER_FAULT;
     start_pending = 0U;
+#if POWER_MULTIRATE_CONTROL
+    control_cancel();
+#endif
 #if POWER_MAIN_APPLICATION
     resume_bootstrap_pending = 0U;
 #endif
@@ -254,6 +261,9 @@ void Power_Stop(void)
     __disable_irq();
     Power_EmergencyOff();
     start_pending = 0U;
+#if POWER_MULTIRATE_CONTROL
+    control_cancel();
+#endif
 #if POWER_MAIN_APPLICATION
     resume_bootstrap_pending = 0U;
     power_status.d_cmd = power_status.v_reference = 0.0f;
@@ -271,6 +281,9 @@ void Power_ClearFault(void)
     __disable_irq();
     Power_EmergencyOff();
     start_pending = 0U;
+#if POWER_MULTIRATE_CONTROL
+    control_cancel();
+#endif
 #if POWER_MAIN_APPLICATION
     resume_bootstrap_pending = 0U;
     sample_valid = early_sample_valid = 0U;
@@ -344,6 +357,12 @@ static int begin_bootstrap(unsigned resume)
     return enable_outputs(LOW_OUTPUTS);
 }
 
+#if POWER_MULTIRATE_CONTROL
+#include "power_multirate.inc"
+#else
+void Power_ControlIRQ(void) { }
+#endif
+
 HAL_StatusTypeDef Power_Init(ADC_HandleTypeDef *adc, HRTIM_HandleTypeDef *hrtim)
 {
     ADC_InjectionConfTypeDef config = {0};
@@ -414,6 +433,10 @@ HAL_StatusTypeDef Power_Init(ADC_HandleTypeDef *adc, HRTIM_HandleTypeDef *hrtim)
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
     cycle_budget = HAL_RCC_GetHCLKFreq() / PWM_FREQUENCY_HZ;
+#if POWER_MULTIRATE_CONTROL
+    control_cancel();
+    HAL_NVIC_SetPriority(PendSV_IRQn, 15U, 0U);
+#endif
     HRTIM1->sTimerxRegs[TIMER_B].TIMxICR = HRTIM_TIMICR_REPC;
     HRTIM1->sTimerxRegs[TIMER_B].TIMxDIER |= HRTIM_TIMDIER_REPIE;
     HAL_NVIC_SetPriority(HRTIM1_TIMB_IRQn, 0U, 0U);
@@ -522,6 +545,10 @@ int Power_RequestStart(unsigned mode, float target_volts)
 #endif
     reverse_polarity_cycles = 0U;
     power_status.isr_cycles_max = 0U;
+#if POWER_MULTIRATE_CONTROL
+    control_cancel();
+    power_status.control_steps = power_status.voltage_steps = power_status.control_cycles_max = 0U;
+#endif
     /* A hardware IRQ may have interrupted the foreground controller init.
      * Commit the request only if the stopped state and fault source remain safe. */
     uint32_t saved = __get_PRIMASK();
@@ -711,6 +738,9 @@ void Power_TimerIRQ(void)
     DIAG_STAGE(POWER_DIAG_STAGE_STATE);
     if (starting) {
         start_pending = 0U;
+#if POWER_MULTIRATE_CONTROL
+    control_cancel();
+#endif
         if (!begin_bootstrap(0U)) DIAG_IRQ_RETURN();
     }
 
@@ -759,12 +789,25 @@ void Power_TimerIRQ(void)
         if (!enable_outputs(ALL_OUTPUTS)) DIAG_IRQ_RETURN();
         power_status.state = POWER_RUNNING;
     }
-    if (power_status.state == POWER_CHANGEOVER && transition_ready) {
+#if POWER_MULTIRATE_CONTROL
+    if (power_status.state == POWER_CHANGEOVER && control_changeover_cycles)
+        --control_changeover_cycles;
+#endif
+    if (power_status.state == POWER_CHANGEOVER && transition_ready
+#if POWER_MULTIRATE_CONTROL
+        && control_changeover_cycles == 0U
+#endif
+       ) {
         /* A valid boost plan was written on the previous IRQ and has now
          * crossed the common preload boundary before enabling all gates. */
         if (!enable_outputs(ALL_OUTPUTS)) DIAG_IRQ_RETURN();
         power_status.state = POWER_RUNNING;
     }
+#if POWER_MULTIRATE_CONTROL
+    control_slice(begin, spacing);
+    control_modulate(begin, spacing);
+    goto finish_control_slice;
+#else
     if (reverse && power_status.state == POWER_RUNNING && reverse_Y.CTRL_RUN_R &&
         vout >= active_target * 1.005f) {
         Power_EmergencyOff();
@@ -874,6 +917,7 @@ void Power_TimerIRQ(void)
             if (!begin_bootstrap(1U)) DIAG_IRQ_RETURN();
         }
     } else write_plan(&plan);
+#endif
 #if POWER_MAIN_APPLICATION
 finish_control_slice:
 #endif

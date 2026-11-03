@@ -30,6 +30,12 @@ typedef struct { volatile uint32_t CR, MCR, DHR12R1, DHR12R2, DOR1, DOR2; } DAC_
 typedef struct { volatile uint32_t CSR; } COMP_TypeDef;
 typedef struct { volatile uint32_t DEMCR; } CoreDebug_Type;
 typedef struct { volatile uint32_t CTRL, CYCCNT; } DWT_Type;
+typedef struct { volatile uint32_t ICSR; } SCB_Type;
+extern SCB_Type test_scb;
+#define SCB (&test_scb)
+#define SCB_ICSR_PENDSVSET_Msk (1UL << 28)
+#define SCB_ICSR_PENDSVCLR_Msk (1UL << 27)
+#define PendSV_IRQn (-2)
 typedef struct {
     uint32_t ClockPrescaler, Resolution, DataAlign, GainCompensation, ScanConvMode;
     uint32_t EOCSelection, LowPowerAutoWait, ContinuousConvMode, NbrOfConversion;
@@ -78,7 +84,7 @@ extern COMP_TypeDef test_comp1, test_comp2;
 #define HRTIM1 (&test_hrtim1)
 #define RCC (&test_rcc)
 #define CoreDebug (&test_core_debug)
-#if (defined(POWER_UNIFIED_DIAGNOSTICS) && POWER_UNIFIED_DIAGNOSTICS) || defined(POWER_TEST_TIMING)
+#if (defined(POWER_UNIFIED_DIAGNOSTICS) && POWER_UNIFIED_DIAGNOSTICS) || defined(POWER_TEST_TIMING) || defined(POWER_TEST_WORKER_PREEMPT)
 DWT_Type *test_dwt_access(void);
 #define DWT test_dwt_access()
 #else

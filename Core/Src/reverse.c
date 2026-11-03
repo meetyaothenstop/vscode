@@ -9,6 +9,7 @@
  */
 #include "reverse.h"
 #include "power_build_config.h"
+#include "control_rates.h"
 #if POWER_MAIN_APPLICATION
 #include "reverse_main_buck.h"
 #endif
@@ -57,7 +58,11 @@ reverse_ExternalOutputs reverse_Y;
 reverse_BlockOutputs reverse_B;
 reverse_ModelStates reverse_X _ALIGN;
 const char * reverse_errorStatus;
-const float reverse_sampleTime = 6.66666666666666665e-06f;
+const float reverse_sampleTime = CONTROL_CURRENT_DT;
+#if POWER_MULTIRATE_CONTROL
+static unsigned reverse_voltage_phase, reverse_voltage_enabled;
+unsigned reverse_voltage_updates;
+#endif
 const char * const reverse_checksum =
    "95d54ecefa15e840ed3fa24e4d40032a8a3afc65";
 static reverse_Parameters reverse_P = {12.0f, 36.0f, 6.0f};
@@ -71,6 +76,9 @@ void reverse_initialize(float time)
 {
    float remainder;
    reverse_errorStatus = NULL;
+#if POWER_MULTIRATE_CONTROL
+   reverse_voltage_phase = reverse_voltage_enabled = reverse_voltage_updates = 0U;
+#endif
    reverse_tickHi = floorf(time/(4294967296.0f*reverse_sampleTime));
    remainder = time - reverse_tickHi*4294967296.0f*reverse_sampleTime;
    reverse_tickLo = floorf(remainder/reverse_sampleTime + .5f);
@@ -188,6 +196,9 @@ void reverse_hold_step(void)
 
 void reverse_prepare_resume(float output_volts)
 {
+#if POWER_MULTIRATE_CONTROL
+   reverse_voltage_phase = reverse_voltage_enabled = 0U;
+#endif
    float reference = fminf(reverse_P.v_target, fmaxf(0.1f, output_volts));
    reverse_X.DiscreteIntegrator3_first = 0;
    reverse_X.DiscreteIntegrator3_i1_x = reference;

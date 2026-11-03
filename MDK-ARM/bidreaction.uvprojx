@@ -355,7 +355,7 @@
             <useXO>0</useXO>
             <ClangAsOpt>1</ClangAsOpt>
             <VariousControls>
-              <MiscControls></MiscControls>
+              <MiscControls>"-Wa,--pd,POWER_MAIN_STACK SETA 1"</MiscControls>
               <Define></Define>
               <Undefine></Undefine>
               <IncludePath></IncludePath>

@@ -37,8 +37,8 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
    }
 
    /* Discrete Transfer Function : 'forward/Discrete\nTransfer Fcn1' */
-   forward_B.DiscreteTransferFcn1 = 0.0203698000000000004f*(forward_U.V_right)+
-                                    0.0399097424959199976f*
+   forward_B.DiscreteTransferFcn1 = CONTROL_PRECHARGE_B*(forward_U.V_right)+
+                                    CONTROL_PRECHARGE_STATE*
                                     forward_X.DiscreteTransferFcn1;
 
    /* Comparator : 'forward/PRECHARGE_ACHED' */
@@ -59,7 +59,7 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
    else
    {
       forward_B.DiscreteIntegrator3 = forward_X.DiscreteIntegrator3_i1_x +
-                                      6.66666666666666665e-06f*
+                                      CONTROL_CURRENT_DT*
                                       forward_X.DiscreteIntegrator3_i2_prevU;
    }
 
@@ -102,7 +102,7 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
    else
    {
       forward_B.DiscreteIntegrator4 = forward_X.DiscreteIntegrator4_i1_x +
-                                      6.66666666666666665e-06f*
+                                      CONTROL_CURRENT_DT*
                                       forward_X.DiscreteIntegrator4_i2_prevU;
    }
 
@@ -197,6 +197,18 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
                                  forward_B.LogicalOperator17;
 #endif
 
+   unsigned voltage_step = 1U;
+#if POWER_MULTIRATE_CONTROL
+   voltage_step = forward_voltage_phase == 0U;
+   forward_voltage_phase = (forward_voltage_phase + 1U) % 5U;
+   if (forward_voltage_enabled != (unsigned)forward_B.LogicalOperator18) {
+      voltage_step = 1U;
+      forward_voltage_phase = 1U;
+   }
+   forward_voltage_enabled = (unsigned)forward_B.LogicalOperator18;
+   if (voltage_step) ++forward_voltage_updates;
+#endif
+   if (voltage_step) {
    /* Product : 'forward/Product2'
     * incorporates
     *  Sum : 'forward/Sum'
@@ -204,7 +216,7 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
     */
    forward_B.Product2 =
       (forward_B.Saturation4 -
-       (0.0203698000000000004f*(forward_U.V_right)+0.0399097424959199976f*
+       (CONTROL_FILTER_B*(forward_U.V_right)+CONTROL_FILTER_STATE*
         forward_X.DiscreteTransferFcn)) *
    ((float)forward_B.LogicalOperator18);
 
@@ -222,7 +234,7 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
    else
    {
       forward_B.DiscreteIntegrator = forward_X.DiscreteIntegrator_i1_x +
-                                     6.66666666666666665e-06f*
+                                     CONTROL_VOLTAGE_DT*
                                      forward_X.DiscreteIntegrator_i2_prevU;
    }
 
@@ -243,6 +255,8 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
       forward_B.Saturation = 0.f;
    }
 
+   }
+
    /* Discrete Integrator : 'forward/Discrete\nIntegrator1' */
    if (forward_X.DiscreteIntegrator1_first < 0 ||
        (!forward_X.DiscreteIntegrator1_i3_prevReset &&
@@ -257,7 +271,7 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
    else
    {
       forward_B.DiscreteIntegrator1 = forward_X.DiscreteIntegrator1_i1_x +
-                                      6.66666666666666665e-06f*
+                                      CONTROL_CURRENT_DT*
                                       forward_X.DiscreteIntegrator1_i2_prevU;
    }
 
@@ -278,7 +292,7 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
    else
    {
       forward_B.DiscreteIntegrator2 = forward_X.DiscreteIntegrator2_i1_x +
-                                      6.66666666666666665e-06f*
+                                      CONTROL_CURRENT_DT*
                                       forward_X.DiscreteIntegrator2_i2_prevU;
    }
    if (forward_B.DiscreteIntegrator2 > 1.f)
@@ -366,19 +380,22 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
    {
       float *buffer = &forward_D_double[0];
       buffer[1*forward_D_size_t[0] + 0] = forward_B.LogicalOperator;
-      forward_D_size_t[0] = (forward_D_size_t[0]+1) % 3;
+      forward_D_size_t[0] = (forward_D_size_t[0]+1) % CONTROL_DELAY_STEPS;
    }
 #endif
 
+   if (voltage_step) {
    /* Update for Discrete Transfer Function : 'forward/Discrete\nTransfer Fcn'
     * incorporates
     *  Signal Inport : 'forward/V_right'
     */
    {
       float newX;
-      newX = (forward_U.V_right)+0.959260400000000013f*
+      newX = (forward_U.V_right)+CONTROL_FILTER_A*
              forward_X.DiscreteTransferFcn;
       forward_X.DiscreteTransferFcn = newX;
+   }
+
    }
 
 #if !FORWARD_STEP_FAST_BUCK
@@ -388,7 +405,7 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
     */
    {
       float newX;
-      newX = (forward_U.V_right)+0.959260400000000013f*
+      newX = (forward_U.V_right)+CONTROL_PRECHARGE_A*
              forward_X.DiscreteTransferFcn1;
       forward_X.DiscreteTransferFcn1 = newX;
    }
@@ -412,6 +429,7 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
    forward_X.DiscreteIntegrator4_i2_prevU = 500.f;
 #endif
 
+   if (voltage_step) {
    /* Update for Discrete Integrator : 'forward/Discrete\nIntegrator'
     * incorporates
     *  Gain : 'forward/Kiv'
@@ -424,6 +442,7 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
       0.0f : 8.0f*forward_B.Product2;
    forward_X.DiscreteIntegrator_i3_prevReset = !!(forward_B.LogicalOperator);
 
+   }
    /* Update for Discrete Integrator : 'forward/Discrete\nIntegrator1'
     * incorporates
     *  Gain : 'forward/Gain1'

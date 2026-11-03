@@ -31,6 +31,7 @@ HRTIM_TypeDef test_hrtim1;
 RCC_TypeDef test_rcc;
 CoreDebug_Type test_core_debug;
 DWT_Type test_dwt;
+SCB_Type test_scb;
 uint32_t test_primask;
 static uint32_t enabled_outputs, active_left_compare, active_right_compare;
 static unsigned adc_channels[3], adc_config_count, counters_started;
@@ -210,7 +211,8 @@ HAL_StatusTypeDef HAL_HRTIM_WaveformCounterStart(HRTIM_HandleTypeDef *timer, uin
     return HAL_OK;
 }
 void HAL_NVIC_SetPriority(int irq, uint32_t preempt, uint32_t sub)
-{ CHECK(irq == HRTIM1_TIMB_IRQn && preempt == 0U && sub == 0U); }
+{ CHECK((irq == HRTIM1_TIMB_IRQn && preempt == 0U && sub == 0U) ||
+        (POWER_MULTIRATE_CONTROL && irq == PendSV_IRQn && preempt == 15U && sub == 0U)); }
 void HAL_NVIC_ClearPendingIRQ(int irq) { CHECK(irq == HRTIM1_TIMB_IRQn); }
 void HAL_NVIC_EnableIRQ(int irq) { CHECK(irq == HRTIM1_TIMB_IRQn); }
 

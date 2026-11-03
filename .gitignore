@@ -79,3 +79,5 @@ id_rsa*
 id_ed25519*
 __pycache__/
 *.pyc
+/.superpowers/multirate/
+/tests/multirate_baseline.log
