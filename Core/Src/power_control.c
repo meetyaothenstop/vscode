@@ -7,6 +7,24 @@
 #include "reverse_main_buck.h"
 #endif
 #include <math.h>
+#if POWER_RAW_FAST_IRQ
+#include "power_raw_policy.h"
+static RawPolicy raw_policy;
+static volatile uint16_t early_input_raw;
+static volatile uint32_t fast_c_cycles_total;
+typedef struct { unsigned left,right,current; } RawSnapshot;
+static inline unsigned raw_output(void);
+static inline int raw_can_resume(void);
+static __attribute__((noinline)) void raw_fault_convert(const RawSnapshot *sample)
+{
+    power_status.fault_v_left=(float)sample->left*ADC_LEFT_VOLTS_PER_COUNT;
+    power_status.fault_v_right=(float)sample->right*ADC_RIGHT_VOLTS_PER_COUNT;
+    power_status.fault_il=(float)sample->current*ADC_CURRENT_AMPS_PER_COUNT-ADC_CURRENT_ZERO_AMPS;
+    power_status.fault_raw_vh=(uint16_t)sample->left;
+    power_status.fault_raw_vl=(uint16_t)sample->right;
+    power_status.fault_raw_il=(uint16_t)sample->current;
+}
+#endif
 
 #define ALL_OUTPUTS (HRTIM_OUTPUT_TA1 | HRTIM_OUTPUT_TA2 | HRTIM_OUTPUT_TB1 | HRTIM_OUTPUT_TB2)
 #define LOW_OUTPUTS (HRTIM_OUTPUT_TA2 | HRTIM_OUTPUT_TB2)
@@ -130,12 +148,12 @@ static void diag_capture(uint32_t fault, uint32_t detail, uint32_t elapsed,
     record->samples = power_status.samples;
     record->sample_fresh = diag_timer_active &&
         (power_diag.irq.valid_mask & (1UL << POWER_DIAG_CP_ADC)) ? 1U : 0U;
-    record->raw_vh = power_status.raw_vh;
-    record->raw_vl = power_status.raw_vl;
-    record->raw_il = power_status.raw_il;
-    record->v_left = power_status.v_left;
-    record->v_right = power_status.v_right;
-    record->il = power_status.il;
+    record->raw_vh = power_status.fault_raw_vh;
+    record->raw_vl = power_status.fault_raw_vl;
+    record->raw_il = power_status.fault_raw_il;
+    record->v_left = power_status.fault_v_left;
+    record->v_right = power_status.fault_v_right;
+    record->il = power_status.fault_il;
     record->timing_elapsed_cycles = elapsed;
     record->timing_spacing_cycles = spacing;
     record->timing_counter_ticks = counter;
@@ -182,24 +200,39 @@ void Power_EmergencyOff(void)
 static void control_cancel(void);
 #endif
 
-static void trip_record(uint32_t fault, uint32_t detail, uint32_t elapsed,
-                        uint32_t spacing, uint32_t counter)
+#if POWER_RAW_FAST_IRQ
+static __attribute__((noinline)) void trip_record_sample(uint32_t fault,uint32_t detail,uint32_t elapsed,
+                        uint32_t spacing,uint32_t counter,const RawSnapshot *selected)
+#else
+static void trip_record(uint32_t fault,uint32_t detail,uint32_t elapsed,
+                        uint32_t spacing,uint32_t counter)
+#endif
 {
     uint32_t saved = __get_PRIMASK();
     __disable_irq();
     Power_EmergencyOff();
     if (power_status.fault == 0U) {
+#if POWER_RAW_FAST_IRQ
+        RawSnapshot sample=selected?*selected:(RawSnapshot){power_status.raw_vh,power_status.raw_vl,power_status.raw_il};
+        raw_fault_convert(&sample);
+#endif
         power_status.fault_detail = detail;
         /* Retain the last complete sample at shutdown. Later fault-state
          * ADC/UI refresh must not erase transient evidence. */
+#if !POWER_RAW_FAST_IRQ
         power_status.fault_v_left = power_status.v_left;
         power_status.fault_v_right = power_status.v_right;
         power_status.fault_il = power_status.il;
         power_status.fault_raw_vh = power_status.raw_vh;
         power_status.fault_raw_vl = power_status.raw_vl;
         power_status.fault_raw_il = power_status.raw_il;
+#endif
         power_status.fault_input_volts = (fault & POWER_FAULT_INPUT) ?
+#if POWER_RAW_FAST_IRQ
+            (active_mode >= 3U ? power_status.fault_v_right : power_status.fault_v_left) : 0.0f;
+#else
             (active_mode >= 3U ? power_status.v_right : power_status.v_left) : 0.0f;
+#endif
         power_status.fault_elapsed_cycles = elapsed;
         power_status.fault_spacing_cycles = spacing;
         power_status.fault_counter_ticks = counter;
@@ -218,6 +251,11 @@ static void trip_record(uint32_t fault, uint32_t detail, uint32_t elapsed,
 #endif
     __set_PRIMASK(saved);
 }
+
+#if POWER_RAW_FAST_IRQ
+static void trip_record(uint32_t fault,uint32_t detail,uint32_t elapsed,uint32_t spacing,uint32_t counter)
+{ trip_record_sample(fault,detail,elapsed,spacing,counter,NULL); }
+#endif
 
 static void trip_detail(uint32_t fault, uint32_t detail)
 {
@@ -467,12 +505,26 @@ int Power_RequestStart(unsigned mode, float target_volts)
 #endif
     int reverse = mode == 3U || mode == 4U;
     int boost = mode == 2U || mode == 4U;
+#if POWER_RAW_FAST_IRQ
+    uint32_t snapshot_mask=__get_PRIMASK(); __disable_irq();
+    unsigned snapshot_left=mode==1U?power_status.raw_vh:early_input_raw;
+    unsigned snapshot_right=power_status.raw_vl,snapshot_current=power_status.raw_il;
+    unsigned snapshot_samples=power_status.samples,snapshot_valid=mode==1U?sample_valid:early_sample_valid;
+    RawSnapshot request_sample={snapshot_left,snapshot_right,snapshot_current};
+    __set_PRIMASK(snapshot_mask);
+    float left=(float)snapshot_left*ADC_LEFT_VOLTS_PER_COUNT;
+    float right=(float)snapshot_right*ADC_RIGHT_VOLTS_PER_COUNT;
+    float start_current=(float)snapshot_current*ADC_CURRENT_AMPS_PER_COUNT-ADC_CURRENT_ZERO_AMPS;
+    float vin=reverse?right:left;
+    float vout=reverse?left:right;
+#else
     float left = power_status.v_left;
 #if POWER_MAIN_APPLICATION
     if (mode != 1U) left = early_input_volts;
 #endif
     float vin = reverse ? power_status.v_right : left;
     float vout = reverse ? left : power_status.v_right;
+#endif
     float start_current_limit = MODE_LIMIT(mode, START_CURRENT_LIMIT_AMPS);
     float start_output_max = MODE_LIMIT(mode, START_OUTPUT_MAX_VOLTS);
     if (power_status.state != POWER_STOPPED || start_pending != 0U) DIAG_REQUEST_RETURN(0);
@@ -489,16 +541,25 @@ int Power_RequestStart(unsigned mode, float target_volts)
     uint32_t rejection = 0U;
     if (mode < 1U || mode > 4U || (POWER_BENCH_12V_BUCK_TEST && mode != 1U))
         rejection = 1U;
-    else if (power_status.samples < 2U ||
+    else if (
+#if POWER_RAW_FAST_IRQ
+             snapshot_samples<2U || !snapshot_valid
+#else
+             power_status.samples < 2U ||
 #if POWER_MAIN_APPLICATION
              !(mode == 1U ? sample_valid : early_sample_valid)
 #else
              !sample_valid
 #endif
+#endif
             ) rejection = 2U;
     else if (!(target_volts >= 1.0f && target_volts <= MODE_LIMIT(mode, MAX_TARGET_VOLTS))) rejection = 3U;
     else if (!(vin >= MODE_LIMIT(mode, INPUT_MIN_VOLTS) && vin <= MODE_LIMIT(mode, INPUT_MAX_VOLTS))) rejection = 4U;
+#if POWER_RAW_FAST_IRQ
+    else if (!(fabsf(start_current) < start_current_limit)) rejection = 5U;
+#else
     else if (!(fabsf(power_status.il) < start_current_limit)) rejection = 5U;
+#endif
     /* A charged output can drive reverse current at cold-start duty. */
     else if (vout > start_output_max) rejection = 6U;
     else if ((boost && vin >= target_volts) || (!boost && vin <= target_volts)) rejection = 7U;
@@ -506,7 +567,11 @@ int Power_RequestStart(unsigned mode, float target_volts)
     else if ((mode == 1U || mode == 3U) && target_volts > vin * POWER_MAIN_BUCK_MAX_DUTY) rejection = 7U;
 #endif
     if (rejection) {
+#if POWER_RAW_FAST_IRQ
+        trip_record_sample(POWER_FAULT_START,rejection,0U,0U,0U,&request_sample);
+#else
         trip_detail(POWER_FAULT_START, rejection);
+#endif
         DIAG_REQUEST_RETURN(0);
     }
     active_mode = mode;
@@ -530,6 +595,10 @@ int Power_RequestStart(unsigned mode, float target_volts)
     active_limits.write_phase_limit_ticks = PWM_PERIOD_TICKS - ((mode == 1U || mode == 3U) ? 4096U : 5120U);
     active_limits.exit_phase_limit_ticks = (mode == 1U || mode == 3U) ? PWM_PERIOD_TICKS - 2048U : PWM_PERIOD_TICKS;
 #endif
+#if POWER_RAW_FAST_IRQ
+    RawPolicy_Build(&raw_policy,mode,target_volts,active_limits.INPUT_MIN_VOLTS,
+        active_limits.INPUT_MAX_VOLTS,active_limits.output_trip_volts,start_current_limit,start_output_max);
+#endif
     if (reverse) {
         reverse_configure(boost ? vin : 0.1f, target_volts, POWER_CURRENT_REFERENCE_LIMIT);
         reverse_initialize(0.0f);
@@ -548,6 +617,11 @@ int Power_RequestStart(unsigned mode, float target_volts)
 #if POWER_MULTIRATE_CONTROL
     control_cancel();
     power_status.control_steps = power_status.voltage_steps = power_status.control_cycles_max = 0U;
+#if POWER_RAW_FAST_IRQ
+    fast_c_cycles_total=0U;
+    power_status.fast_run_cycles_max=power_status.control_start_delay_max=0U;
+    power_status.control_run_wall_cycles_max=power_status.control_fast_c_cycles_max=0U;
+#endif
 #endif
     /* A hardware IRQ may have interrupted the foreground controller init.
      * Commit the request only if the stopped state and fault source remain safe. */
@@ -574,6 +648,15 @@ void Power_Service(AdcMeasurements *measurements)
     il = power_status.raw_il;
     __set_PRIMASK(saved);
     ADC_ConvertRaw(vh, vl, il, measurements);
+#if POWER_RAW_FAST_IRQ
+    saved=__get_PRIMASK(); __disable_irq();
+    if(power_status.state==POWER_STOPPED||power_status.state==POWER_FAULT) {
+        power_status.v_left=(float)vh*ADC_LEFT_VOLTS_PER_COUNT;
+        power_status.v_right=(float)vl*ADC_RIGHT_VOLTS_PER_COUNT;
+        power_status.il=(float)il*ADC_CURRENT_AMPS_PER_COUNT-ADC_CURRENT_ZERO_AMPS;
+    }
+    __set_PRIMASK(saved);
+#endif
     uint32_t command = power_command;
     power_command = POWER_CMD_NONE;
     if (command == POWER_CMD_STOP) Power_Stop();
@@ -587,6 +670,11 @@ void Power_Service(AdcMeasurements *measurements)
     else if (command == POWER_CMD_START_REVERSE_BOOST)
         (void)Power_RequestStart(4U, power_target_volts);
 }
+
+
+#if POWER_RAW_FAST_IRQ
+#include "power_raw_fast.inc"
+#endif
 
 void Power_TimerIRQ(void)
 {
@@ -658,7 +746,11 @@ void Power_TimerIRQ(void)
         DIAG_IRQ_RETURN();
     }
 #if POWER_MAIN_APPLICATION
+#if POWER_RAW_FAST_IRQ
+    early_input_raw=(uint16_t)ADC1->JDR2;
+#else
     early_input_volts = (float)(uint16_t)ADC1->JDR2 * ADC_LEFT_VOLTS_PER_COUNT;
+#endif
     early_sample_valid = 1U;
     if (use_late_input && !late_valid &&
         (start_pending || (power_status.state != POWER_STOPPED && power_status.state != POWER_FAULT))) {
@@ -684,10 +776,12 @@ void Power_TimerIRQ(void)
 #endif
     power_status.raw_vl = (uint16_t)ADC1->JDR3;
     ADC1->ISR = ADC_ISR_JEOS | ADC_ISR_JEOC;
+    #if !POWER_RAW_FAST_IRQ
     power_status.il = (float)power_status.raw_il * ADC_CURRENT_AMPS_PER_COUNT -
                       ADC_CURRENT_ZERO_AMPS;
     power_status.v_left = (float)power_status.raw_vh * ADC_LEFT_VOLTS_PER_COUNT;
     power_status.v_right = (float)power_status.raw_vl * ADC_RIGHT_VOLTS_PER_COUNT;
+    #endif
     ++power_status.samples;
 #if POWER_MAIN_APPLICATION
     sample_valid = !use_late_input || late_valid;
@@ -700,6 +794,9 @@ void Power_TimerIRQ(void)
     if (power_status.state == POWER_STOPPED && !starting) DIAG_IRQ_RETURN();
     DIAG_STAGE(POWER_DIAG_STAGE_CHECKS);
     int reverse = active_mode >= 3U;
+#if POWER_RAW_FAST_IRQ
+    raw_checks(starting,(unsigned)reverse);
+#else
     float vin = reverse ? power_status.v_right : power_status.v_left;
     float vout = reverse ? power_status.v_left : power_status.v_right;
     if (!(vin >= IRQ_LIMIT(INPUT_MIN_VOLTS) &&
@@ -733,6 +830,7 @@ void Power_TimerIRQ(void)
          vout > IRQ_LIMIT(START_OUTPUT_MAX_VOLTS)))
         trip_detail(POWER_FAULT_START,
                     !(fabsf(power_status.il) < IRQ_LIMIT(START_CURRENT_LIMIT_AMPS)) ? 8U : 9U);
+#endif
     if (power_status.state == POWER_FAULT) DIAG_IRQ_RETURN();
     DIAG_CHECKPOINT(POWER_DIAG_CP_CHECKS);
     DIAG_STAGE(POWER_DIAG_STAGE_STATE);
@@ -750,7 +848,13 @@ void Power_TimerIRQ(void)
             resume_bootstrap_pending = 0U;
             /* ADC/input/output/current checks above use this period's fresh
              * sample. Abandon a no-longer-qualified resume while still off. */
-            if (vout < active_target * 0.99f && fabsf(power_status.il) < 0.25f) {
+            if (
+#if POWER_RAW_FAST_IRQ
+                raw_can_resume()
+#else
+                vout < active_target * 0.99f && fabsf(power_status.il) < 0.25f
+#endif
+               ) {
                 if (!begin_bootstrap(1U)) DIAG_IRQ_RETURN();
             } else {
                 bootstrap_cycles = 0U;
@@ -772,8 +876,12 @@ void Power_TimerIRQ(void)
         if (--bootstrap_cycles == 0U) {
             PwmPlan initial;
             if (bootstrap_resume) initial = resume_plan;
+#if POWER_RAW_FAST_IRQ
+            else { initial.left_compare=reverse?(PWM_PERIOD_TICKS*85U/100U+PWM_DEADTIME_TICKS):0U; initial.right_compare=reverse?0U:(PWM_PERIOD_TICKS*85U/100U+PWM_DEADTIME_TICKS); }
+#else
             else if (reverse) (void)PWM_MakeReversePlan(0.0f, 0, &initial);
             else (void)PWM_MakePlan(0.0f, 0, &initial);
+#endif
             write_plan(&initial);
             arming_cycles = 2U;
             power_status.state = POWER_ARMING;
@@ -935,6 +1043,11 @@ finish_control_slice:
 #endif
     else if (HRTIM1->sTimerxRegs[TIMER_B].TIMxISR & HRTIM_TIMISR_REP)
         timing_trip(6U, elapsed, spacing, HRTIM1->sTimerxRegs[TIMER_B].CNTxR);
+#if POWER_RAW_FAST_IRQ
+    fast_c_cycles_total+=elapsed;
+    if(power_status.state!=POWER_FAULT && elapsed>power_status.fast_run_cycles_max)
+        power_status.fast_run_cycles_max=elapsed;
+#endif
 #if POWER_UNIFIED_DIAGNOSTICS
     diag_timer_active = 0U;
 #endif

@@ -9,6 +9,12 @@
 #if POWER_MULTIRATE_CONTROL && !POWER_MAIN_APPLICATION
 #error Multirate control requires the main application.
 #endif
+#ifndef POWER_RAW_FAST_IRQ
+#define POWER_RAW_FAST_IRQ POWER_MULTIRATE_CONTROL
+#endif
+#if POWER_RAW_FAST_IRQ && !POWER_MULTIRATE_CONTROL
+#error Raw fast IRQ requires MAIN multirate control.
+#endif
 #if POWER_MULTIRATE_CONTROL
 #define CONTROL_CURRENT_DT 0.000020f
 #define CONTROL_VOLTAGE_DT 0.000100f

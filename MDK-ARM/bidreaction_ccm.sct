@@ -13,6 +13,8 @@ LR_IROM1 0x08000000 0x00020000 {
     power_control.o (.text.Power_ControlIRQ)
     power_control.o (.text.enable_outputs)
     power_control.o (.text.control_*)
+    power_control.o (.text.raw_checks)
+    power_control.o (.text.raw_can_resume)
     forward.o (.text.forward_step)
     forward.o (.text.forward_main_buck_step)
     forward.o (.text.forward_main_full_step)

@@ -80,4 +80,5 @@ id_ed25519*
 __pycache__/
 *.pyc
 /.superpowers/multirate/
+/.superpowers/fastirq-raw/
 /tests/multirate_baseline.log

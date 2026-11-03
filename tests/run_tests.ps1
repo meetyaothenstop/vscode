@@ -19,6 +19,14 @@ try {
     $multirateFlags = @('-DPOWER_MAIN_APPLICATION=1','-DPOWER_MAIN_ADC_SOFTWARE_ONLY=1','-DPOWER_MULTIRATE_CONTROL=1')
     $mainDiagFlags = $mainFlags + @('-DPOWER_UNIFIED_DIAGNOSTICS=1')
     $cases = @(
+        @{Name='pwm_density_test'; Sources=@('tests/pwm_density_test.c')}
+        @{Name='raw_pdm_test'; Sources=@('tests/raw_backend_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function','-DPOWER_TEST_RAW_INTERLEAVE=1')); Args=@('4')}
+        @{Name='raw_diag_rejection_test'; Sources=@('tests/raw_backend_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function','-DPOWER_TEST_RAW_INTERLEAVE=1','-DPOWER_UNIFIED_DIAGNOSTICS=1')); Args=@('2')}
+        @{Name='raw_policy_test'; Sources=@('tests/raw_policy_test.c'); Flags=$multirateFlags}
+        @{Name='raw_backend_test'; Sources=@('tests/raw_backend_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function','-DPOWER_TEST_RAW_INTERLEAVE=1'))}
+        @{Name='raw_epoch_test'; Sources=@('tests/raw_backend_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function','-DPOWER_TEST_RAW_INTERLEAVE=1')); Args=@('1')}
+        @{Name='raw_rejection_test'; Sources=@('tests/raw_backend_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function','-DPOWER_TEST_RAW_INTERLEAVE=1')); Args=@('2')}
+        @{Name='raw_publication_test'; Sources=@('tests/raw_backend_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function','-DPOWER_TEST_RAW_INTERLEAVE=1')); Args=@('3')}
         @{Name='multirate_controller_test'; Sources=@('tests/multirate_controller_test.c','Core/Src/forward.c','Core/Src/reverse.c'); Flags=$multirateFlags}
         @{Name='multirate_menu_test'; Sources=@('tests/main_menu_test.c','Core/Src/power_menu.c'); Flags=$multirateFlags}
         @{Name='multirate_ui_test'; Sources=@('tests/main_ui_test.c','Core/Src/power_ui.c','Core/Src/power_menu.c'); Flags=$multirateFlags}
@@ -81,7 +89,9 @@ try {
         if ($case.ContainsKey('Flags')) { $extraFlags = @($case.Flags) }
         & gcc -std=c11 -O2 -Wall -Wextra -Werror @extraFlags -ICore/Inc -Itests @($case.Sources) -lm -o $executable
         if ($LASTEXITCODE -ne 0) { throw "$($case.Name) compile failed" }
-        & $executable
+        $caseArgs=@()
+        if($case.ContainsKey('Args')){$caseArgs=@($case.Args)}
+        & $executable @caseArgs
         if ($LASTEXITCODE -ne 0) { throw "$($case.Name) failed" }
         Write-Output "$($case.Name): PASS"
     }

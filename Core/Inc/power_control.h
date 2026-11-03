@@ -30,7 +30,12 @@ typedef struct {
     uint32_t isr_cycles_max;
     uint16_t raw_vh, raw_vl, raw_il;
     float v_left, v_right, il;
+#if POWER_RAW_FAST_IRQ
+    union { float d_cmd; uint32_t d_cmd_bits; };
+    union { float v_reference; uint32_t v_reference_bits; };
+#else
     float d_cmd, v_reference;
+#endif
     uint32_t left_compare, right_compare;
     /* First-fault diagnostics. S1..S9 are start rejections; T1..T6 timing.
      * Timing values are CPU cycles / raw HRTIM counter ticks, latched on fault. */
@@ -41,6 +46,10 @@ typedef struct {
 #if POWER_MULTIRATE_CONTROL
     /* MAIN multirate worker counts and wall-clock latency (includes preemption). */
     uint32_t control_steps, voltage_steps, control_cycles_max;
+#if POWER_RAW_FAST_IRQ
+    uint32_t fast_run_cycles_max, control_start_delay_max;
+    uint32_t control_run_wall_cycles_max, control_fast_c_cycles_max;
+#endif
 #endif
 } PowerStatus;
 

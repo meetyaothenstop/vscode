@@ -256,8 +256,27 @@ void test_hrtim_clear_flag(HRTIM_HandleTypeDef *, uint32_t);
 #define DWT_CTRL_CYCCNTENA_Msk (1U << 0)
 
 static inline uint32_t __get_PRIMASK(void) { return test_primask; }
-static inline void __disable_irq(void) { test_primask = 1U; }
-static inline void __set_PRIMASK(uint32_t value) { test_primask = value; }
+#if defined(POWER_TEST_RAW_INTERLEAVE)
+void test_before_irq_disable(void);
+#endif
+#if defined(POWER_TEST_RAW_INTERLEAVE) || defined(POWER_TEST_WORKER_PREEMPT)
+void test_irq_unmask(void);
+#endif
+static inline void __disable_irq(void) {
+#if defined(POWER_TEST_RAW_INTERLEAVE)
+    if(!test_primask)test_before_irq_disable();
+#endif
+    test_primask = 1U;
+}
+static inline void __set_PRIMASK(uint32_t value) {
+#if defined(POWER_TEST_RAW_INTERLEAVE) || defined(POWER_TEST_WORKER_PREEMPT)
+    uint32_t previous=test_primask;
+#endif
+    test_primask = value;
+#if defined(POWER_TEST_RAW_INTERLEAVE) || defined(POWER_TEST_WORKER_PREEMPT)
+    if(previous && !value)test_irq_unmask();
+#endif
+}
 static inline void __DMB(void) { }
 uint32_t HAL_RCC_GetHCLKFreq(void);
 HAL_StatusTypeDef HAL_ADC_Init(ADC_HandleTypeDef *);

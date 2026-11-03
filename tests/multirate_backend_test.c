@@ -11,12 +11,15 @@ void Power_ControlIRQ(void);
 static void worker(void) { before_call(); Power_ControlIRQ(); after_call(); }
 #if defined(POWER_TEST_WORKER_PREEMPT)
 static unsigned preempt_worker;
+static unsigned deferred_fault;
+void test_irq_unmask(void)
+{if(deferred_fault){deferred_fault=0U;period(12,0,7.6f);}}
 DWT_Type *test_dwt_access(void)
 {
-    if(preempt_worker) {
-        preempt_worker=0U;
+    if(preempt_worker && --preempt_worker==0U) {
         /* Preempt just before ready publication, after the epoch check. */
-        period(12,0,7.6f);
+        if(test_primask)deferred_fault=1U;
+        else period(12,0,7.6f);
     }
     return &test_dwt;
 }
@@ -53,8 +56,9 @@ int main(void)
     run_start(1U); worker(); irq(12,0,0,0,1000,640);
     expect_fault(POWER_FAULT_ADC); worker(); CHECK(enabled_outputs==0U);
 #if defined(POWER_TEST_WORKER_PREEMPT)
-    run_start(1U); preempt_worker=1U; worker();
+    run_start(1U); preempt_worker=2U; worker();
     expect_fault(POWER_FAULT_CURRENT);
+    CHECK(fabsf(power_status.fault_il-7.6f)<0.01f);
     cmp=HRTIM1->sTimerxRegs[TIMER_B].CMP1xR;
     for(unsigned n=0;n<4;n++) {period(12,0,0);worker();}
     CHECK(enabled_outputs==0U && HRTIM1->sTimerxRegs[TIMER_B].CMP1xR==cmp);
