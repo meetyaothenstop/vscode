@@ -16,6 +16,7 @@ HEX为`MDK-ARM/bidreaction/bidreaction.hex`。保留正向Buck/Boost及反向Buc
 70组回归和诊断关闭兼容后端通过，独立只读审查无阻断问题；主/台架ARM6.18重建0错误0警告，实际镜像/CCM/栈/DMA/AXF及快速指令检查通过，台架HEX保持。
 主HEX SHA256：`82AD7C7F52F283F974369F1B8F45C204F83DB79E6A4A9AF7C62E9B68176A7428`。
 用户自行下载原主工程HEX并加载配套AXF，复测方法及原因表见[ADG1测试说明](docs/ADG1故障1定位测试.md)。不沿用旧地址，不宣称实板报1/16已解决。
+ADG1首次故障截图：valid=1、code=1、detail=1，锁存冷启动BOOTSTRAP（state=1）、反向Buck（mode=3），自举剩余30、占空指令/参考均0；启动年龄0x570个CPU周期（按150MHz约9.28μs）。已定位到闭环运行前的ADC1入口JEOS缺失分支，原始ADC入口标志尚未提供，触发/完成/清标志根因待查。
 
 ## FRM1版本历史
 

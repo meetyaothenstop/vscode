@@ -63,3 +63,18 @@ ADC2四种缺失/溢出组合，反向忽略未用ADC2、首包冻结、成功/�
 独立只读代码审查无Critical/Important问题；自定义关闭界面续传时的版本标识
 差异为Minor，已在上文说明，独立选择标签的代码整理留待后续。
 助手仅准备/编译/验证固件，由用户操作下载；未操作或测量板子。
+
+## ADG1首次实板故障截图
+
+用户截图锁存字段：valid=1、code=1、detail=1、state=1（BOOTSTRAP）、
+mode=3（反向Buck）、run_id=1、start_pending=0、bootstrap_resume=0、
+bootstrap_remaining=0x1E（30）、arming_remaining=0、resume_pending=0。
+目标6V，duty/reference_volts/两侧compare记录均0。
+run_age_cycles=0x570（1392），按固件150MHz约9.28μs；run_age_ticks=0。
+总样本数为0x5DF52，截图未显示尾部ADC入口标志。
+
+state是关断前锁存的阶段，不是读取截图时的实时状态。根据代码，已开始
+冷启动自举且尚未递减一个完整自举周期，正常PI闭环尚未投入运行。
+detail=1确定本次触发ADC1入口JEOS缺失分支；还不能确定是触发、转换完成
+还是清标志时序导致。后续需补adc1_entry_flags、adc2_entry_flags、adc_reason。
+这次截图不验证正常运行时的最坏执行时间或物理根因，不修改频率/保护策略。
