@@ -19,6 +19,9 @@ static MenuFrame frame;
 static uint32_t frame_tick, retry_tick, last_fault;
 static MenuState last_state;
 static uint8_t next_page, dirty, display_failed, last_pending, last_valid;
+#if POWER_OLED_FRAME_RESUME
+static uint8_t page_inflight,urgent_redraw;
+#endif
 
 void PowerUI_Init(void)
 {
@@ -28,6 +31,9 @@ void PowerUI_Init(void)
     dirty = 1;
     display_failed = last_pending = last_valid = 0;
     last_state = MENU_IDLE;
+#if POWER_OLED_FRAME_RESUME
+    page_inflight=urgent_redraw=0;
+#endif
 }
 
 static MenuTelemetry telemetry(const AdcMeasurements *measurements)
@@ -63,8 +69,16 @@ static void sync_control_state(const MenuTelemetry *data)
             menu.editing = 0;
         dirty = 1;
 #if POWER_OLED_DMA
+#if POWER_OLED_FRAME_RESUME
+        /* Transient active states coalesce into the next complete frame.
+         * Stop/fault, user actions and accepted cold starts replace stale UI. */
+        if(data->fault!=last_fault || data->pending!=last_pending ||
+           data->state==MENU_IDLE || data->state==MENU_FAULT ||
+           last_state==MENU_IDLE || last_state==MENU_FAULT)urgent_redraw=1;
+#else
         /* A completed old packet may drain, then restart the new state at page 0. */
         next_page = MENU_ROWS;
+#endif
 #endif
     }
     if (data->valid != last_valid) dirty = 1;
@@ -96,6 +110,9 @@ void PowerUI_Service(const AdcMeasurements *measurements)
         }
         data = telemetry(measurements);
         dirty = 1;
+#if POWER_OLED_FRAME_RESUME
+        urgent_redraw=1;
+#endif
     }
     sync_control_state(&data);
 
@@ -112,12 +129,26 @@ void PowerUI_Service(const AdcMeasurements *measurements)
         display_failed = 1;
         next_page = MENU_ROWS;
         dirty = 1;
+#if POWER_OLED_FRAME_RESUME
+        page_inflight=0;urgent_redraw=1;
+#endif
         return;
     }
+#if POWER_OLED_FRAME_RESUME
+    if(OLED_TakePageComplete() && page_inflight) {
+        page_inflight=0;++next_page;
+        if(next_page==MENU_ROWS)EVENT_UI(POWER_EVENT_UI_FRAME_DONE,MENU_ROWS-1U,HAL_OK);
+    }
+    if(urgent_redraw) {
+        next_page=MENU_ROWS;page_inflight=0;urgent_redraw=0;
+    }
+#endif
     if (!allow) {
         /* Poll may drain an old packet, but RefreshPage must not start a new
          * command during startup, even when legacy OLED mute is disabled. */
+#if !POWER_OLED_FRAME_RESUME
         next_page = MENU_ROWS;
+#endif
         dirty = 1;
         EVENT_UI(POWER_EVENT_UI_STARTUP_MUTED,next_page,HAL_OK);
         return;
@@ -153,9 +184,14 @@ void PowerUI_Service(const AdcMeasurements *measurements)
         EVENT_UI(POWER_EVENT_UI_SUBMIT_PAGE,next_page,HAL_OK);
         HAL_StatusTypeDef result = OLED_RefreshPage(next_page);
         if (result == HAL_OK) {
+#if POWER_OLED_FRAME_RESUME
+            page_inflight=1;
+            EVENT_UI(POWER_EVENT_UI_PAGE_QUEUED,next_page,result);
+#else
             ++next_page;
-            display_failed = 0;
             EVENT_UI(POWER_EVENT_UI_PAGE_QUEUED,next_page-1U,result);
+#endif
+            display_failed = 0;
         } else if (result != HAL_BUSY) {
             EVENT_UI(POWER_EVENT_UI_IO_ERROR,next_page,result);
             /* An absent display never blocks key handling or power control. */

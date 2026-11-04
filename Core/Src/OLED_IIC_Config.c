@@ -18,12 +18,21 @@ unsigned char ScreenBuffer[SCREEN_PAGE_NUM][SCREEN_COLUMN];
 /* All packets reside in ordinary SRAM, separate from the mutable drawing RAM.
  * Callbacks only publish progress; the foreground starts the next packet. */
 typedef enum { OLED_IDLE, OLED_COMMAND, OLED_COMMAND_DONE,
-               OLED_DATA_READY, OLED_DATA, OLED_DATA_DONE, OLED_ERROR } OledPhase;
+               OLED_DATA_READY, OLED_DATA, OLED_DATA_DONE,
+#if POWER_OLED_FRAME_RESUME
+               OLED_PAUSED,
+#endif
+               OLED_ERROR } OledPhase;
 static volatile OledPhase oled_phase = OLED_ERROR;
 static DMA_HandleTypeDef oled_dma;
 static uint8_t oled_commands[4], oled_data[SCREEN_COLUMN + 1];
 static uint8_t oled_offline;
 static uint32_t oled_packet_tick;
+#if POWER_OLED_FRAME_RESUME
+static uint8_t oled_page_complete;
+uint8_t OLED_TakePageComplete(void)
+{ uint8_t done=oled_page_complete;oled_page_complete=0;return done; }
+#endif
 extern I2C_HandleTypeDef hi2c1;
 
 static HAL_StatusTypeDef oled_fail(void)
@@ -41,6 +50,9 @@ static HAL_StatusTypeDef oled_fail(void)
 
 static void oled_dma_init(void)
 {
+#if POWER_OLED_FRAME_RESUME
+    oled_page_complete=0;
+#endif
     oled_phase = OLED_ERROR;
     oled_offline = 0;
     __HAL_RCC_DMA1_CLK_ENABLE();
@@ -89,8 +101,17 @@ HAL_StatusTypeDef OLED_TransferPoll(uint8_t allow)
         if (HAL_GetTick() - oled_packet_tick >= 50U) return oled_fail();
         return HAL_BUSY;
     }
-    if (phase == OLED_COMMAND_DONE || phase == OLED_DATA_READY) {
+    if (phase == OLED_COMMAND_DONE || phase == OLED_DATA_READY
+#if POWER_OLED_FRAME_RESUME
+        || phase == OLED_PAUSED
+#endif
+       ) {
+#if POWER_OLED_FRAME_RESUME
+        if (!allow) { oled_phase=OLED_PAUSED; return HAL_BUSY; }
+        if (phase==OLED_PAUSED)oled_packet_tick=HAL_GetTick();
+#else
         if (!allow) { oled_phase = OLED_IDLE; return HAL_OK; }
+#endif
         if (phase == OLED_COMMAND_DONE) oled_packet_tick = HAL_GetTick();
         else if (HAL_GetTick() - oled_packet_tick >= 50U) return oled_fail();
         oled_phase = OLED_DATA;
@@ -105,7 +126,12 @@ HAL_StatusTypeDef OLED_TransferPoll(uint8_t allow)
         if (result != HAL_OK) return oled_fail();
         return HAL_BUSY;
     }
-    if (phase == OLED_DATA_DONE) oled_phase = OLED_IDLE;
+    if (phase == OLED_DATA_DONE) {
+        oled_phase = OLED_IDLE;
+#if POWER_OLED_FRAME_RESUME
+        oled_page_complete=1;
+#endif
+    }
     return HAL_OK;
 }
 

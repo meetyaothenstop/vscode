@@ -2,6 +2,7 @@
 #define OLED_IIC_CONFIG_H
 
 #include "main.h"
+#include "power_build_config.h"
 
 #define OLED_ADDRESS    0x78
 
@@ -34,6 +35,10 @@ HAL_StatusTypeDef OLED_RefreshPage(uint8_t page);
  * Poll after keys: allow=0 drains a packet but never starts the data packet.
  * ERROR latches display offline until reset; it does not stop power control. */
 HAL_StatusTypeDef OLED_TransferPoll(uint8_t allow);
+#if POWER_OLED_FRAME_RESUME
+/* Foreground consumes exactly once after Poll has drained the data packet. */
+uint8_t OLED_TakePageComplete(void);
+#endif
 void OLED_ClearRAM(void);
 void OLED_SetPixel(signed short int x, signed short int y, unsigned char set_pixel);
 void OLED_DisplayMode(unsigned char mode);

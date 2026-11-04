@@ -8,12 +8,14 @@ enum {
     POWER_EVENT_UI_WAIT_DMA, POWER_EVENT_UI_STARTUP_MUTED, POWER_EVENT_UI_WAIT_REFRESH,
     POWER_EVENT_UI_RENDER, POWER_EVENT_UI_FRAME_READY, POWER_EVENT_UI_SUBMIT_PAGE,
     POWER_EVENT_UI_PAGE_QUEUED, POWER_EVENT_UI_PAGE_BUSY, POWER_EVENT_UI_IO_ERROR,
-    POWER_EVENT_UI_IDLE
+    POWER_EVENT_UI_IDLE, POWER_EVENT_UI_FRAME_DONE
 };
 typedef struct {
     uint32_t calls, entry_cycles, entry_tick, gap_cycles_max;
     uint32_t stage, stage_cycles, stage_tick, page, io_status;
     uint32_t page_submissions, page_cycles, page_tick, last_page;
+    uint32_t entry_samples, stage_samples, page_samples, gap_samples_max;
+    uint32_t frames_completed, frame_cycles, frame_tick, frame_samples;
 } PowerEventProgress;
 typedef struct {
     PowerEventProgress slots[2];
@@ -31,9 +33,13 @@ typedef struct {
     uint32_t ui_entry_age_cycles, ui_entry_age_ticks;
     uint32_t ui_progress_age_cycles, ui_progress_age_ticks;
     uint32_t ui_page_age_cycles, ui_page_age_ticks;
+    uint32_t run_age_samples, foreground_age_samples, ui_entry_age_samples;
+    uint32_t ui_progress_age_samples, ui_page_age_samples;
+    uint32_t ui_frame_age_cycles, ui_frame_age_ticks, ui_frame_age_samples;
 } PowerEventFault;
 typedef struct {
     uint32_t version, cpu_hz, clock_ready, run_id, run_start_cycles, run_start_tick;
+    uint32_t sample_hz, run_start_samples;
     PowerEventMailbox foreground, ui;
     PowerEventFault fault;
 } PowerEventDiagnostics;

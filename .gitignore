@@ -82,4 +82,5 @@ __pycache__/
 /.superpowers/multirate/
 /.superpowers/fastirq-raw/
 /.superpowers/eventdiag/
+/.superpowers/oled-frame/
 /tests/multirate_baseline.log

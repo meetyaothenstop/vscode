@@ -12,6 +12,24 @@ static void worker(void) {before_call();Power_ControlIRQ();after_call();}
 int main(int argc,char **argv)
 {
     cold_boot();
+    if(argc>1 && argv[1][0]=='4') {
+        stopped_samples(0,12,0);CHECK(request(3,6));period(0,12,0);
+        AdcMeasurements m;Power_Service(&m);
+        PowerEvent_UIMark(POWER_EVENT_UI_ENTRY,0,HAL_OK);
+        PowerEvent_UIMark(POWER_EVENT_UI_PAGE_QUEUED,7,HAL_OK);
+        PowerEvent_UIMark(POWER_EVENT_UI_FRAME_DONE,7,HAL_OK);
+        power_status.samples+=18000000U; /*120s of accepted150kHz ADC periods*/
+        test_dwt.CYCCNT+=(uint32_t)(120ULL*150000000ULL);test_tick+=11484U;
+        protection_latched=1;before_call();Power_FaultIRQ();after_call();
+        CHECK(power_event.fault.foreground_age_samples==18000000U);
+        CHECK(power_event.fault.ui_entry_age_samples==18000000U);
+        CHECK(power_event.fault.ui_page_age_samples==18000000U);
+        CHECK(power_event.fault.ui_frame_age_samples==18000000U);
+        CHECK(power_event.fault.ui.frames_completed==1U);
+        CHECK(power_event.fault.run_age_samples>=18000000U);
+        CHECK(power_event.fault.foreground_age_ticks==11484U);
+        puts("120s sample-period ages survive DWT wraps and slow HAL tick: PASS");return 0;
+    }
     if(argc>1 && argv[1][0]=='1') {
         stopped_samples(0,12,0);CHECK(request(3,6));period(0,12,0);
         PowerEvent_UIMark(POWER_EVENT_UI_WAIT_DMA,4,HAL_BUSY);

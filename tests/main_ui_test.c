@@ -23,6 +23,12 @@ static float last_target;
 static int valid, accept;
 static uint8_t transport_allowed;
 static HAL_StatusTypeDef transport, submission;
+#if POWER_OLED_FRAME_RESUME
+static uint8_t queued_page,completed_page;
+static unsigned page_histogram[8];
+uint8_t OLED_TakePageComplete(void)
+{uint8_t done=completed_page;completed_page=0;return done;}
+#endif
 #if POWER_EVENT_DIAGNOSTICS
 static uint32_t event_last_stage,event_seen,event_entries;
 void PowerEvent_UIMark(uint32_t stage,uint32_t page,uint32_t status)
@@ -74,6 +80,9 @@ HAL_StatusTypeDef OLED_RefreshPage(uint8_t page)
     assert(page < MENU_ROWS);
     ++page_calls;
     last_page = page;
+#if POWER_OLED_FRAME_RESUME
+    if(submission==HAL_OK){queued_page=1;++page_histogram[page];}
+#endif
     return submission;
 }
 HAL_StatusTypeDef OLED_TransferPoll(uint8_t allow)
@@ -81,6 +90,9 @@ HAL_StatusTypeDef OLED_TransferPoll(uint8_t allow)
     ++polls;
     transport_allowed = allow;
     stopped_at_poll = stops;
+#if POWER_OLED_FRAME_RESUME
+    if(transport==HAL_OK && queued_page){completed_page=1;queued_page=0;}
+#endif
     return transport;
 }
 
@@ -98,6 +110,9 @@ static void setup(void)
     transport = submission = HAL_OK;
     transport_allowed = 1U;
     PowerUI_Init();
+#if POWER_OLED_FRAME_RESUME
+    queued_page=completed_page=0;memset(page_histogram,0,sizeof(page_histogram));
+#endif
 }
 
 static void service(unsigned mask)
@@ -187,7 +202,7 @@ static void test_zero_off_is_submitted_in_both_directions_and_fault(void)
         assert(starts == 1U && last_mode == (reverse ? 3U : 1U) && last_target == 0.0f);
         assert(!pending && power_status.state == POWER_STOPPED);
         settle();
-        assert(strstr(drawn.rows[4], "0 V") && strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? "BUCK M-EVT1" : "BUCK M-RAW1") : "BUCK M-50/10") : "BUCK M-RRES1")));
+        assert(strstr(drawn.rows[4], "0 V") && strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? (POWER_OLED_FRAME_RESUME ? "BUCK M-FRM1" : "BUCK M-EVT1") : "BUCK M-RAW1") : "BUCK M-50/10") : "BUCK M-RRES1")));
         power_status.state = POWER_FAULT;
         power_status.fault = 8U;
         key(3);
@@ -204,15 +219,15 @@ static void test_running_frame_cadence_busy_stop_and_fault_restart(void)
     setup();
     service(0U);
 #if POWER_MAIN_ADC_SOFTWARE_ONLY
-    assert(strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? "MAIN ADC EVT1 50/10" : "MAIN ADC RAW1 50/10") : "MAIN ADC I50 V10") : "MAIN ADC RBUCK RES1")));
+    assert(strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? (POWER_OLED_FRAME_RESUME ? "MAIN ADC FRM1 50/10" : "MAIN ADC EVT1 50/10") : "MAIN ADC RAW1 50/10") : "MAIN ADC I50 V10") : "MAIN ADC RBUCK RES1")));
 #else
-    assert(strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? "MAIN HW EVT1 50/10" : "MAIN HW RAW1 50/10") : "MAIN HW I50 V10") : "MAIN HW GUARD 6A")));
+    assert(strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? (POWER_OLED_FRAME_RESUME ? "MAIN HW FRM1 50/10" : "MAIN HW EVT1 50/10") : "MAIN HW RAW1 50/10") : "MAIN HW I50 V10") : "MAIN HW GUARD 6A")));
 #endif
     key(3); key(1); key(3);
     pending = 0U;
     power_status.state = POWER_RUNNING;
     service(0U);
-    assert(strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? "FORWARD BUCK M-EVT1" : "FORWARD BUCK M-RAW1") : "FORWARD BUCK M-50/10") : "FORWARD BUCK M-RRES1")));
+    assert(strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? (POWER_OLED_FRAME_RESUME ? "FORWARD BUCK M-FRM1" : "FORWARD BUCK M-EVT1") : "FORWARD BUCK M-RAW1") : "FORWARD BUCK M-50/10") : "FORWARD BUCK M-RRES1")));
     assert(strstr(drawn.rows[6], "11.90 V"));
     assert(strstr(drawn.rows[7], "RUNNING") && last_page == 0U);
     unsigned before = clears;
@@ -288,8 +303,44 @@ static void test_event_progress_paths(void)
     assert(event_seen&(1U<<POWER_EVENT_UI_SUBMIT_PAGE));
 }
 #endif
+#if POWER_OLED_FRAME_RESUME
+static void test_transient_starting_preserves_full_frame(void)
+{
+    setup();service(0);key(3);key(1);key(3);pending=0;
+    power_status.state=POWER_BOOTSTRAP;service(0);
+    power_status.state=POWER_RUNNING;service(0);
+    unsigned frozen_clears=clears;
+    assert(strstr(drawn.rows[6],"11.90 V"));
+    measured.v_low=20.0;
+    for(unsigned n=0;n<6;n++) {
+        power_status.state=POWER_BOOTSTRAP;service(0);
+        power_status.state=POWER_RUNNING;service(0);
+        assert(clears==frozen_clears && strstr(drawn.rows[6],"11.90 V"));
+    }
+    power_status.state=POWER_BOOTSTRAP;service(0);
+    power_status.state=POWER_RUNNING;service(0);
+    assert(clears==frozen_clears && last_page==7);
+    power_status.state=POWER_BOOTSTRAP;service(0);
+    power_status.state=POWER_RUNNING;service(0);
+    assert(clears==frozen_clears+1 && strstr(drawn.rows[6],"20.00 V"));
+    memset(page_histogram,0,sizeof(page_histogram));
+    for(unsigned n=0;n<400;n++) {
+        power_status.state=POWER_BOOTSTRAP;service(0);
+        power_status.state=POWER_RUNNING;service(0);
+    }
+    assert(page_histogram[7]>0);
+    for(unsigned p=0;p<8;p++)assert(page_histogram[p]>0);
+    power_status.state=POWER_FAULT;power_status.fault=16;service(0);
+    assert(last_page==0 && strstr(drawn.rows[7],"FAULT:16"));
+    power_status.state=POWER_STOPPED;power_status.fault=0;service(0);
+    assert(last_page==0 && strstr(drawn.rows[7],"STOPPED"));
+}
+#endif
 int main(int argc, char **argv)
 {
+#if POWER_OLED_FRAME_RESUME
+    if(argc==1||!strcmp(argv[1],"frame"))test_transient_starting_preserves_full_frame();
+#endif
 #if POWER_EVENT_DIAGNOSTICS
     test_event_progress_paths();
 #endif
