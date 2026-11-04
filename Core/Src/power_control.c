@@ -275,7 +275,8 @@ static void trip(uint32_t fault)
 }
 
 #if POWER_ADC_FAULT_DETAILS
-static __attribute__((noinline)) void adc_trip(uint32_t flags1,uint32_t flags2,uint32_t reason)
+static __attribute__((noinline)) void adc_trip(uint32_t flags1,uint32_t flags2,uint32_t reason,
+                                             uint32_t begin,uint32_t spacing,uint32_t counter)
 {
     uint32_t saved=__get_PRIMASK();
     __disable_irq();
@@ -283,7 +284,9 @@ static __attribute__((noinline)) void adc_trip(uint32_t flags1,uint32_t flags2,u
     if(power_status.fault==0U) {
         adc_fault_flags1=flags1;adc_fault_flags2=flags2;adc_fault_reason=reason;
     }
-    trip_detail(POWER_FAULT_ADC,reason);
+    /* Entry spacing/counter were already read by the fast timing guard.
+     * Elapsed is sampled after shutdown, before first-fault packet copying. */
+    trip_record(POWER_FAULT_ADC,reason,DWT->CYCCNT-begin,spacing,counter);
     __set_PRIMASK(saved);
 }
 #endif
@@ -777,7 +780,8 @@ void Power_TimerIRQ(void)
 #if POWER_ADC_FAULT_DETAILS
             adc_trip(flags,input_flags,
                      ((flags&ADC_ISR_JEOS)?0U:POWER_ADC_REASON_JEOS_MISSING) |
-                     ((flags&ADC_ISR_JQOVF)?POWER_ADC_REASON_JQOVF:0U));
+                     ((flags&ADC_ISR_JQOVF)?POWER_ADC_REASON_JQOVF:0U),
+                     begin,spacing,entry_counter);
 #else
             trip(POWER_FAULT_ADC);
 #endif
@@ -799,7 +803,7 @@ void Power_TimerIRQ(void)
         (start_pending || (power_status.state != POWER_STOPPED && power_status.state != POWER_FAULT))) {
         sample_valid = 0U;
 #if POWER_ADC_FAULT_DETAILS
-        adc_trip(flags,input_flags,POWER_ADC_REASON_LATE_INVALID);
+        adc_trip(flags,input_flags,POWER_ADC_REASON_LATE_INVALID,begin,spacing,entry_counter);
 #else
         trip(POWER_FAULT_ADC);
 #endif

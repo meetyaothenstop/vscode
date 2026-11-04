@@ -28,16 +28,19 @@ static void check_adc(unsigned reason,unsigned flags1,unsigned flags2)
     CHECK(power_event.fault.detail==reason && power_event.fault.adc_reason==reason);
     CHECK(power_event.fault.adc1_entry_flags==flags1);
     CHECK(power_event.fault.adc2_entry_flags==flags2);
+    CHECK(power_status.fault_spacing_cycles==1000U);
+    CHECK(power_status.fault_counter_ticks==640U);
 #else
     (void)reason;(void)flags1;(void)flags2;
     CHECK(!power_status.fault_detail && !power_event.fault.detail);
+    CHECK(!power_status.fault_spacing_cycles && !power_status.fault_counter_ticks);
     CHECK(!power_event.fault.adc_reason && !power_event.fault.adc1_entry_flags && !power_event.fault.adc2_entry_flags);
 #endif
 }
 int main(void)
 {
     cold_boot();
-    CHECK(power_event.version==(POWER_ADC_FAULT_DETAILS?3U:2U));
+    CHECK(power_event.version==(POWER_ADC_FAULT_DETAILS?4U:2U));
     const unsigned flags[]={ADC_ISR_JEOC,ADC_ISR_JEOS|ADC_ISR_JEOC|ADC_ISR_JQOVF,ADC_ISR_JQOVF};
     const unsigned reasons[]={1U,2U,3U};
     for(unsigned phase=0;phase<3;phase++)for(unsigned i=0;i<3;i++) {
@@ -48,14 +51,17 @@ int main(void)
         CHECK(power_event.fault.state==(phase==0?POWER_STOPPED:phase==1?POWER_BOOTSTRAP:POWER_RUNNING));
         CHECK(power_event.fault.start_pending==(phase==0));
         PowerEventFault saved=power_event.fault;
+        uint32_t spacing=power_status.fault_spacing_cycles,counter=power_status.fault_counter_ticks;
         /* IRQ has written W1C masks; subsequent healthy/failing IRQs, service,
          * STOP and a rejected clear must not replace first-entry evidence. */
         period(0,12,0);irq(0,12,0,ADC_ISR_JQOVF,1000,640);service();stop();
         protection_active=1;clear_fault();protection_active=0;
         CHECK(!memcmp(&saved,(const void*)&power_event.fault,sizeof(saved)));
+        CHECK(power_status.fault_spacing_cycles==spacing && power_status.fault_counter_ticks==counter);
         clear_fault();
         PowerEventFault zero={0};
         CHECK(!memcmp(&zero,(const void*)&power_event.fault,sizeof(zero)));
+        CHECK(!power_status.fault_spacing_cycles && !power_status.fault_counter_ticks);
     }
     const unsigned late_flags[]={0,ADC_ISR_EOC,ADC_ISR_EOS,ADC_ISR_EOC|ADC_ISR_EOS|ADC_ISR_OVR};
     for(unsigned phase=0;phase<3;phase++)for(unsigned i=0;i<4;i++) {

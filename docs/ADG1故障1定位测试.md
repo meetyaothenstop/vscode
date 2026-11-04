@@ -78,3 +78,7 @@ state是关断前锁存的阶段，不是读取截图时的实时状态。根据
 detail=1确定本次触发ADC1入口JEOS缺失分支；还不能确定是触发、转换完成
 还是清标志时序导致。后续需补adc1_entry_flags、adc2_entry_flags、adc_reason。
 这次截图不验证正常运行时的最坏执行时间或物理根因，不修改频率/保护策略。
+
+随后补充截图：adc1_entry_flags=0x1、adc2_entry_flags=0xF、adc_reason=1。
+用户确认持续运行、只按板上START，没有暂停/单步。ADC1只有ADRDY，缺JEOS；
+ADC2有EOC/EOS且无OVR。后续入口时序观测见[ADG2说明](ADG2启动ADC时序测试.md)。

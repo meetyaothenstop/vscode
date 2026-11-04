@@ -45,7 +45,7 @@ static void event_foreground(void)
 static void event_init(void)
 {
     power_event=(PowerEventDiagnostics){0};
-    power_event.version=POWER_ADC_FAULT_DETAILS?3U:2U;
+    power_event.version=POWER_ADC_FAULT_DETAILS?4U:2U;
 #if POWER_ADC_FAULT_DETAILS
     adc_fault_flags1=adc_fault_flags2=adc_fault_reason=0U;
 #endif

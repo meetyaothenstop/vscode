@@ -6,7 +6,19 @@ HEX为`MDK-ARM/bidreaction/bidreaction.hex`。保留正向Buck/Boost及反向Buc
 
 ## 当前版本
 
-2026-11-04：当前为**MAIN ADG1 ADC首故障定位候选**，首页`MAIN ADC ADG1 50/10`、参数页`M-ADG1`。
+2026-11-04：当前为**MAIN ADG2 启动ADC入口时序定位候选**，首页`MAIN ADC ADG2 50/10`、参数页`M-ADG2`，事件版本4。
+ADG1补充实板记录：ADC1入口0x1（仅ADRDY）、ADC2入口0xF（有EOC/EOS且无OVR）、reason1；用户确认持续运行，只按板上START。
+冷启动BOOTSTRAP剩余30，正常闭环尚未投入。已在真实后端的合成迟到时序中复现相同标志/阶段；这不是实板迟到或物理根因的证明。
+ADG2仅在ADC故障分支补填原`power_status.fault_spacing_cycles/fault_counter_ticks/fault_elapsed_cycles`，保留精确ADC入口标志，用下一次实板记录验证前一次IRQ迟到的假设。
+频率仍为PWM/ADC/快速保护150kHz、电流50kHz、电压10kHz；PI、保护条件/门限及FRM1界面续传保持。用户操作下载，助手未操作板子。
+修改前7564102已用`pre-adcphase-20261104`上传核对；版本标签`main-adcdiag2-20261104`。主/台架ARM6.18重建0错误0警告，台架HEX保持。
+71组回归及诊断关闭兼容检查通过，独立只读审查无问题；实际镜像/CCM/栈/DMA/AXF及快速整数指令检查通过。
+主HEX SHA256：`739DAAE0835E7A8207615E6D8B67473832D11E45665CA3B8819043114328E815`。
+复测表达式、证据与假设边界见[ADG2测试说明](docs/ADG2启动ADC时序测试.md)。下载主工程HEX并加载配套AXF，不沿用旧地址；不宣称报1/16已解决。
+
+## ADG1版本历史
+
+2026-11-04：当时为**MAIN ADG1 ADC首故障定位候选**，首页`MAIN ADC ADG1 50/10`、参数页`M-ADG1`。
 用户确认OLED已正常刷新，但按START一开始偶发报1，工况仍是右12V→左6V、100Ω。
 报1为ADC有效性保护，尚无足以确定转换/触发/清标志根因的实板记录，不能据此认定控制频率过高。
 本版关断后锁存原中断入口ADC1/ADC2标志，新增`power_event.fault.adc_reason`及`adc1_entry_flags/adc2_entry_flags`，事件版本3。
