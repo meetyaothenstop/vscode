@@ -16,6 +16,7 @@ ADG2仅在ADC故障分支补填原`power_status.fault_spacing_cycles/fault_count
 主HEX SHA256：`739DAAE0835E7A8207615E6D8B67473832D11E45665CA3B8819043114328E815`。
 复测表达式、证据与假设边界见[ADG2测试说明](docs/ADG2启动ADC时序测试.md)。下载主工程HEX并加载配套AXF，不沿用旧地址；不宣称报1/16已解决。
 最新用户反馈：目前主要报4和16，按START立即出现与接近6V后出现两种情况都有。此前提交的截图power_status.fault=0、power_event.fault.valid=0，尚无这两类新故障的有效首包；需读取fault_v_left/right、fault_il及首故障code/state。反向Buck目标6V时，4为计算输出>9V，16为计算IL>+1A连续16个PWM采样；ADC专用字段不用于判断这两项。真实越限与采样偏差仍未区分，未据此改动固件。
+最新阻塞：Keil大量`Cannot access Memory`，同一fault独立项16与结构体0x01010000矛盾；用户确认OLED正常刷新、显示4。用户确认功率输出停止且故障保留后，助手尝试一次暂停CPU，Keil报`Cannot access target. Shutting down debug session.`，未能确认暂停成功；保留错误弹窗，未复位/重连/下载。用户要求先整理交接，完整接续信息见[2026-11-04摘要](docs/对话接续摘要-2026-11-04.md)，先恢复可靠调试读取，再判断电气根因。
 
 ## ADG1版本历史
 
