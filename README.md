@@ -15,6 +15,7 @@ ADG2仅在ADC故障分支补填原`power_status.fault_spacing_cycles/fault_count
 71组回归及诊断关闭兼容检查通过，独立只读审查无问题；实际镜像/CCM/栈/DMA/AXF及快速整数指令检查通过。
 主HEX SHA256：`739DAAE0835E7A8207615E6D8B67473832D11E45665CA3B8819043114328E815`。
 复测表达式、证据与假设边界见[ADG2测试说明](docs/ADG2启动ADC时序测试.md)。下载主工程HEX并加载配套AXF，不沿用旧地址；不宣称报1/16已解决。
+最新用户反馈：目前主要报4和16，按START立即出现与接近6V后出现两种情况都有。此前提交的截图power_status.fault=0、power_event.fault.valid=0，尚无这两类新故障的有效首包；需读取fault_v_left/right、fault_il及首故障code/state。反向Buck目标6V时，4为计算输出>9V，16为计算IL>+1A连续16个PWM采样；ADC专用字段不用于判断这两项。真实越限与采样偏差仍未区分，未据此改动固件。
 
 ## ADG1版本历史
 

@@ -77,3 +77,38 @@ AXF与快速整数指令检查的结果见[验证记录](ADG2-验证.json)。
 保留FRM1 OLED续传、四种模式和唯一受限bench；PWM/ADC/快速保护150kHz、
 电流50kHz、电压10kHz。由用户下载，助手没有操作板子；未证明实板报1/16
 消除、最坏执行时间、电气行为或硬件OCP接线。
+
+## 最新反馈：主要报4/16
+
+用户说明目前以4、16为主，启动立即报与输出接近6V后报都有。
+此前截图中power_status.fault=0、power_event.fault.valid=0，尚未取得本次
+4/16的有效首故障包。不能用这份空包确认正常，也不能当成ADC故障证据。
+
+根据当前主工程代码，沿用之前反向Buck目标6V工况：
+
+- code4（OUTPUT）：左侧输出计算值>6×1.5=9V，一次有效采样即可触发。
+- code16（REVERSE）：软件计算IL>+1A连续16个150kHz采样点，约106.7μs。
+  反向传能预期软件IL为负；此项不同于code8的绝对过流门限。
+
+RawPolicy只是将原有浮点保护判据枚举成整数区间，门限未因ADG2改变。
+两项均需区分真实过冲/电流反向与采样或校准偏差。万用表约5.9V、传感器
+输出2.49V的旧反馈不能代替这次故障时的锁存值；不据此放宽门限或归因频率。
+
+首故障为4/16时，事件包ADC专用字段按设计为0；应查看下面的锁存值。
+报错后保持现场，在Watch添加并截图：
+
+```text
+power_status.fault
+power_status.fault_v_left
+power_status.fault_v_right
+power_status.fault_il
+power_event.fault.valid
+power_event.fault.code
+power_event.fault.state
+```
+
+valid应为1，code给出首个保护；power_status.fault可能叠加后续故障位。
+state是首故障关断前阶段：1自举、2装载、3运行、6保持。
+若锁存值与物理读数有明显矛盾，再补相应fault_raw_vh/vl/il与已锁存的
+参考/占空/电流方向计数，确定采样和控制的具体分支。
+这次仅记录反馈与采集方法，固件和二进制保持fcc6e3f对应ADG2。
