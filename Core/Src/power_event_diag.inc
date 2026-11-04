@@ -1,5 +1,10 @@
 /* Included only by power_control.c. No calls from healthy fast IRQ/worker. */
 volatile PowerEventDiagnostics power_event;
+#if POWER_ADC_FAULT_DETAILS
+/* Private cold-path context, published with the rest of the first fault.
+ * Written/read under the same PRIMASK lock, only after emergency off. */
+static uint32_t adc_fault_flags1,adc_fault_flags2,adc_fault_reason;
+#endif
 
 static void event_publish(volatile PowerEventMailbox *mailbox, uint32_t stage,
                           uint32_t page, uint32_t status, unsigned entry)
@@ -40,7 +45,10 @@ static void event_foreground(void)
 static void event_init(void)
 {
     power_event=(PowerEventDiagnostics){0};
-    power_event.version=2U;
+    power_event.version=POWER_ADC_FAULT_DETAILS?3U:2U;
+#if POWER_ADC_FAULT_DETAILS
+    adc_fault_flags1=adc_fault_flags2=adc_fault_reason=0U;
+#endif
     power_event.cpu_hz=HAL_RCC_GetHCLKFreq();
     power_event.sample_hz=PWM_FREQUENCY_HZ;
 }
@@ -92,5 +100,12 @@ static __attribute__((noinline)) void event_capture(uint32_t code,uint32_t detai
     f->ui_frame_age_cycles=f->ui.frames_completed?cycles-f->ui.frame_cycles:0U;
     f->ui_frame_age_ticks=f->ui.frames_completed?tick-f->ui.frame_tick:0U;
     f->ui_frame_age_samples=f->ui.frames_completed?f->samples-f->ui.frame_samples:0U;
+    f->adc1_entry_flags=f->adc2_entry_flags=f->adc_reason=0U;
+#if POWER_ADC_FAULT_DETAILS
+    if(code==POWER_FAULT_ADC) {
+        f->adc1_entry_flags=adc_fault_flags1;f->adc2_entry_flags=adc_fault_flags2;
+        f->adc_reason=adc_fault_reason;
+    }
+#endif
     __DMB();f->valid=1U;
 }

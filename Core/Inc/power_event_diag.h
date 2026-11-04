@@ -4,6 +4,11 @@
 #include "power_build_config.h"
 #if POWER_EVENT_DIAGNOSTICS
 enum {
+    POWER_ADC_REASON_JEOS_MISSING=1U,
+    POWER_ADC_REASON_JQOVF=2U,
+    POWER_ADC_REASON_LATE_INVALID=4U
+};
+enum {
     POWER_EVENT_UI_ENTRY=1, POWER_EVENT_UI_KEYS, POWER_EVENT_UI_POLL,
     POWER_EVENT_UI_WAIT_DMA, POWER_EVENT_UI_STARTUP_MUTED, POWER_EVENT_UI_WAIT_REFRESH,
     POWER_EVENT_UI_RENDER, POWER_EVENT_UI_FRAME_READY, POWER_EVENT_UI_SUBMIT_PAGE,
@@ -36,6 +41,9 @@ typedef struct {
     uint32_t run_age_samples, foreground_age_samples, ui_entry_age_samples;
     uint32_t ui_progress_age_samples, ui_page_age_samples;
     uint32_t ui_frame_age_cycles, ui_frame_age_ticks, ui_frame_age_samples;
+    /* Exact cached IRQ-entry flags, before W1C clearing. Only ADC faults
+     * carry a nonzero reason; masks1 missing JEOS,2 JQOVF,4 late ADC2. */
+    uint32_t adc1_entry_flags, adc2_entry_flags, adc_reason;
 } PowerEventFault;
 typedef struct {
     uint32_t version, cpu_hz, clock_ready, run_id, run_start_cycles, run_start_tick;

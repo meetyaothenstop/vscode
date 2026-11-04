@@ -274,6 +274,20 @@ static void trip(uint32_t fault)
     trip_detail(fault, 0U);
 }
 
+#if POWER_ADC_FAULT_DETAILS
+static __attribute__((noinline)) void adc_trip(uint32_t flags1,uint32_t flags2,uint32_t reason)
+{
+    uint32_t saved=__get_PRIMASK();
+    __disable_irq();
+    Power_EmergencyOff();
+    if(power_status.fault==0U) {
+        adc_fault_flags1=flags1;adc_fault_flags2=flags2;adc_fault_reason=reason;
+    }
+    trip_detail(POWER_FAULT_ADC,reason);
+    __set_PRIMASK(saved);
+}
+#endif
+
 static void timing_trip(uint32_t detail, uint32_t elapsed,
                         uint32_t spacing, uint32_t counter)
 {
@@ -759,8 +773,15 @@ void Power_TimerIRQ(void)
         early_sample_valid = 0U;
 #endif
         if (start_pending || (power_status.state != POWER_STOPPED &&
-                              power_status.state != POWER_FAULT))
+                              power_status.state != POWER_FAULT)) {
+#if POWER_ADC_FAULT_DETAILS
+            adc_trip(flags,input_flags,
+                     ((flags&ADC_ISR_JEOS)?0U:POWER_ADC_REASON_JEOS_MISSING) |
+                     ((flags&ADC_ISR_JQOVF)?POWER_ADC_REASON_JQOVF:0U));
+#else
             trip(POWER_FAULT_ADC);
+#endif
+        }
         ADC1->ISR = ADC_ISR_JQOVF | ADC_ISR_JEOS | ADC_ISR_JEOC;
 #if POWER_LATE_INPUT_ADC && !POWER_MAIN_APPLICATION
         ADC2->ISR = ADC_ISR_EOC | ADC_ISR_EOS | ADC_ISR_OVR;
@@ -777,7 +798,11 @@ void Power_TimerIRQ(void)
     if (use_late_input && !late_valid &&
         (start_pending || (power_status.state != POWER_STOPPED && power_status.state != POWER_FAULT))) {
         sample_valid = 0U;
+#if POWER_ADC_FAULT_DETAILS
+        adc_trip(flags,input_flags,POWER_ADC_REASON_LATE_INVALID);
+#else
         trip(POWER_FAULT_ADC);
+#endif
         ADC1->ISR = ADC_ISR_JEOS | ADC_ISR_JEOC;
         DIAG_IRQ_RETURN();
     }

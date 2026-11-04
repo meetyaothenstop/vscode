@@ -17,6 +17,12 @@
 #if POWER_EVENT_DIAGNOSTICS && (!POWER_MAIN_APPLICATION || !POWER_RAW_FAST_IRQ)
 #error Event diagnostics requires the MAIN raw fast IRQ.
 #endif
+#ifndef POWER_ADC_FAULT_DETAILS
+#define POWER_ADC_FAULT_DETAILS POWER_EVENT_DIAGNOSTICS
+#endif
+#if POWER_ADC_FAULT_DETAILS && !POWER_EVENT_DIAGNOSTICS
+#error ADC fault details requires MAIN event diagnostics.
+#endif
 #ifndef POWER_MAIN_ADC_SOFTWARE_ONLY
 #define POWER_MAIN_ADC_SOFTWARE_ONLY 0U
 #endif

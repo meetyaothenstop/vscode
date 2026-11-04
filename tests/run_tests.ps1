@@ -19,6 +19,7 @@ try {
     $multirateFlags = @('-DPOWER_MAIN_APPLICATION=1','-DPOWER_MAIN_ADC_SOFTWARE_ONLY=1','-DPOWER_MULTIRATE_CONTROL=1')
     $mainDiagFlags = $mainFlags + @('-DPOWER_UNIFIED_DIAGNOSTICS=1')
     $cases = @(
+        @{Name='adc_fault_diag_test'; Sources=@('tests/adc_fault_diag_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function'))}
         @{Name='oled_resume_driver_test'; Sources=@('tests/oled_resume_driver_test.c','Core/Src/OLED_IIC_Config.c'); Flags=$multirateFlags}
         @{Name='oled_frame_integration_test'; Sources=@('tests/oled_frame_integration_test.c','Core/Src/power_ui.c','Core/Src/power_menu.c','Core/Src/OLED_IIC_Config.c'); Flags=$multirateFlags}
         @{Name='event_longrun_test'; Sources=@('tests/event_backend_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function','-DPOWER_TEST_EVENT_PUBLISH=1')); Args=@('4')}
