@@ -6,21 +6,25 @@ HEX为`MDK-ARM/bidreaction/bidreaction.hex`。保留正向Buck/Boost及反向Buc
 
 ## 当前版本
 
-2026-11-07：按用户要求，MAIN正向Boost的冷启动电流检查从0.25A改为**绝对值小于1A**，
-请求接受检查和待启动/自举/装载阶段复查共用同一门限。
-配置入口为[`Core/Inc/power_build_config.h`](Core/Inc/power_build_config.h)中的
-`POWER_MAIN_FORWARD_BOOST_START_CURRENT_LIMIT_AMPS`。
-反向Boost仍为0.25A；正反向Buck仍为1A。Boost启动输出残压仍需≤0.25V，
-电流参考6A、采样过流7.5A、方向/ADC/时序保护及150/50/10kHz频率保持。
-这只是启动允许条件调整，不是故障128 S8的物理根因结论。
+2026-11-07：用户明确选择将MAIN正向Boost的全部电气保护与冷启动门限对齐Buck：
+实测输入10～42V、启动`|IL|<1A`、输出残压≤3V、
+过压线`min(max(最终目标×1.5,6V),40V)`。
+统一引用[`Core/Inc/power_build_config.h`](Core/Inc/power_build_config.h)中的`POWER_MAIN_BUCK_*`门限组，
+不再保留单独的正向Boost启动电流副本。请求校验与后续冷启动/运行IRQ共用缓存策略。
+正向Boost启动仍要求最终目标高于实测输入、目标≤36V；不使用Buck的0.95降压关系。
+10～42V是采样保护窗口，不表示当前36V输出上限能够在42V输入时升压启动。
+反向Boost保持原6～40V、0.25A/0.25V、目标×1.1；电流参考6A、采样过流7.5A、
+方向/ADC/时序保护、Boost预充/换向/软启动和150/50/10kHz频率保持。
+这是门限策略调整，不证明原128 S8/S9或故障4的物理根因已解决。
 
 保留用户已设置的正向默认12V→18V、反向默认12V→6V。
-主/bench ARM6.18构建均0错误0警告，bench HEX保持；主镜像已更新，标识仍为`MAIN ADC ADG2 50/10`、`M-ADG2`。
-主HEX SHA256：`9E0A07792B71EB3AC647C6E1BCC675AB0829AFA8352D223EFE4F90DE43CD4CB0`。
-73组完整主机回归通过，独立只读审查无需修正的问题。
-修改前12→18V基线`3ad070f`已用`pre-forward-boost-start1a-20261107`上传核对，
-本版标签`main-forward-boost-start1a-20261107`。验证及范围见[正向Boost启动1A](docs/正向Boost启动1A-20261107.md)。
-由用户下载；本次没有操作板子，未证明实板S8消除、稳压、最坏时序或硬件OCP接线。
+标识仍为`MAIN ADC ADG2 50/10`、`M-ADG2`，事件版本4。
+75组完整主机回归通过；主/bench ARM6.18构建均0错误0警告，bench HEX保持，独立只读审查无需修正的问题。
+主HEX SHA256：`624DA1162750FC0567DD4D6959101F2DE2C6065D6F73BB3F6D1F127C77BDDDDD`。
+修改前`7c985e9`已用`pre-forward-boost-align-20261107`上传核对，
+本版标签`main-forward-boost-align-20261107`。验证及范围见[正向Boost门限对齐](docs/正向Boost门限对齐Buck-20261107.md)，
+前一版仅修改启动电流的记录见[启动1A历史](docs/正向Boost启动1A-20261107.md)。
+由用户下载；本次没有操作板子，未证明实板稳压、最坏时序或硬件OCP接线。
 
 ## 默认电压设置
 

@@ -54,7 +54,10 @@ static unsigned resume_bootstrap_pending;
  * run on the original ADC1 phase, even if the unused ADC2 sample is lost. */
 static volatile unsigned early_sample_valid;
 static volatile float early_input_volts;
-#define MODE_LIMIT(mode, name) (((mode) == 1U || (mode) == 3U) ? \
+/* Electrical policy only: Boost voltage relation, ADC phase, sequence and
+ * timing deadlines remain selected separately by the actual mode. */
+#define MAIN_SHARED_ELECTRICAL_LIMITS(mode) ((mode) == 1U || (mode) == 2U || (mode) == 3U)
+#define MODE_LIMIT(mode, name) (MAIN_SHARED_ELECTRICAL_LIMITS(mode) ? \
     POWER_MAIN_BUCK_##name : POWER_##name)
 /* Fixed for an accepted request. Publish with active_mode/target before
  * start_pending, rather than choosing Buck/Boost constants in every IRQ. */
@@ -559,10 +562,6 @@ int Power_RequestStart(unsigned mode, float target_volts)
     float vout = reverse ? left : power_status.v_right;
 #endif
     float start_current_limit = MODE_LIMIT(mode, START_CURRENT_LIMIT_AMPS);
-#if POWER_MAIN_APPLICATION
-    if (mode == 2U)
-        start_current_limit = POWER_MAIN_FORWARD_BOOST_START_CURRENT_LIMIT_AMPS;
-#endif
     float start_output_max = MODE_LIMIT(mode, START_OUTPUT_MAX_VOLTS);
     if (power_status.state != POWER_STOPPED || start_pending != 0U) DIAG_REQUEST_RETURN(0);
     power_status.protection_ready = (uint32_t)PowerProtection_IsReady();
@@ -619,10 +618,10 @@ int Power_RequestStart(unsigned mode, float target_volts)
     active_limits.START_CURRENT_LIMIT_AMPS = start_current_limit;
     active_limits.START_OUTPUT_MAX_VOLTS = start_output_max;
     active_limits.output_trip_volts = target_volts * MODE_LIMIT(mode, OUTPUT_OVERVOLTAGE_RATIO);
-    if ((mode == 1U || mode == 3U) && target_volts < POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_MIN_VOLTS &&
+    if (MAIN_SHARED_ELECTRICAL_LIMITS(mode) && target_volts < POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_MIN_VOLTS &&
         active_limits.output_trip_volts < POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_MIN_VOLTS)
         active_limits.output_trip_volts = POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_MIN_VOLTS;
-    if ((mode == 1U || mode == 3U) && active_limits.output_trip_volts >
+    if (MAIN_SHARED_ELECTRICAL_LIMITS(mode) && active_limits.output_trip_volts >
         POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_MAX_VOLTS)
         active_limits.output_trip_volts = POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_MAX_VOLTS;
     /* MAIN Buck directions share the paired write path: reserve128 CPU

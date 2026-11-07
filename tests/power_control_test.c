@@ -1215,7 +1215,7 @@ static void main_buck_limits_and_reachability(void)
     }
     for (unsigned mode = 2U; mode <= 4U; mode += 2U) {
         stopped_samples(mode == 2U ? 41.0f : 0.0f, mode == 2U ? 0.0f : 41.0f, 0.0f);
-        CHECK(!request(mode, 36.0f) && power_status.fault_detail == 4U);
+        CHECK(!request(mode, 36.0f) && power_status.fault_detail == (mode == 2U ? 7U : 4U));
     }
     for (unsigned mode = 1U; mode <= 3U; mode += 2U) {
         const float gain = mode == 1U ? ADC_LEFT_VOLTS_PER_COUNT : ADC_RIGHT_VOLTS_PER_COUNT;
@@ -1365,7 +1365,7 @@ static void main_forward_startup1a3v(void)
                    accepted_current[n] * ADC_CURRENT_AMPS_PER_COUNT - ADC_CURRENT_ZERO_AMPS);
         CHECK(power_status.state == POWER_RUNNING && !power_status.fault);
     }
-    /* Reverse Buck shares1A/3V; forward Boost now permits1A but keeps0.25V. */
+    /* Reverse Buck and forward Boost now share1A/3V. */
     stopped_samples(0.0f, 36.0f, -1.05f);
     CHECK(!request(3U, 18.0f) && power_status.fault_detail == 5U);
     stopped_samples(3.05f, 36.0f, 0.0f);
@@ -1373,6 +1373,8 @@ static void main_forward_startup1a3v(void)
     stopped_samples(12.0f, 0.0f, 0.3f);
     CHECK(request(2U, 36.0f));
     stopped_samples(12.0f, 0.3f, 0.0f);
+    CHECK(request(2U, 36.0f));
+    stopped_samples(12.0f, 3.05f, 0.0f);
     CHECK(!request(2U, 36.0f) && power_status.fault_detail == 6U);
     puts("Main forward startup:36->18V, |IL|<1A/output<=3V, request/IRQ raw edges, all cold phases, first fault and other-mode isolation: PASS");
 }
@@ -1529,7 +1531,7 @@ static void main_mode_protection(void)
         power_status.il = mode <= 2U ? 1.0f : (mode == 3U ? -1.0f : -0.5f);
         CHECK(!request(mode, target) && power_status.fault_detail == 5U);
         start_running(mode, source, target);
-        const float threshold = (mode == 1U || mode == 3U) ? 18.0f : 39.6f;
+        const float threshold = (mode == 1U || mode == 3U) ? 18.0f : (mode == 2U ? 40.0f : 39.6f);
         const float gain = mode >= 3U ? ADC_LEFT_VOLTS_PER_COUNT : ADC_RIGHT_VOLTS_PER_COUNT;
         const float below = floorf(threshold / gain) * gain;
         period(mode >= 3U ? below : source, mode >= 3U ? source : below, 0.0f);
@@ -1569,7 +1571,7 @@ static void main_mode_protection(void)
     expect_fault(POWER_FAULT_CURRENT); CHECK(power_status.fault_raw_il == 4009U);
     CHECK(request(1U, 0.0f)); period(24.0f, 0.0f, 0.0f);
     CHECK(power_status.fault_raw_il == 4009U);
-    puts("Main mode protection: both Buck1.5x with6..40V limits, Boost1.1x, cold limits and6A reference vs7.5A sampled trip: PASS");
+    puts("Main mode protection: Buck/forward Boost1.5x with6..40V OVP, reverse Boost1.1x, cold limits and6A reference vs7.5A sampled trip: PASS");
 }
 
 static void main_adc_mode_selection(void)

@@ -138,8 +138,8 @@
 #define POWER_REVERSE_DEFAULT_OUTPUT_VOLTS 12U
 #endif
 
-/* Main Buck nominal menu range12..40V; fresh input protection has endpoint
- * margin, without extending the claimed nominal operating range. */
+/* Main nominal menu range12..40V; fresh input protection has endpoint margin.
+ * MAIN Buck and forward Boost share the electrical limits below. */
 #define POWER_MAIN_INPUT_SETTING_MIN           12U
 #define POWER_MAIN_INPUT_SETTING_MAX           40U
 #define POWER_MAIN_OUTPUT_SETTING_MIN           0U
@@ -147,16 +147,13 @@
 #define POWER_MAIN_BUCK_INPUT_MIN_VOLTS        10.0f
 #define POWER_MAIN_BUCK_INPUT_MAX_VOLTS        42.0f
 #define POWER_MAIN_BUCK_MAX_TARGET_VOLTS       36.0f
-/* MAIN Buck directions share the forward policy selected by the user. */
+/* Shared by MAIN Buck directions and forward Boost, per user request. */
 #define POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_RATIO 1.5f
 #define POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_MIN_VOLTS 6.0f
 #define POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_MAX_VOLTS 40.0f
 #define POWER_MAIN_BUCK_START_CURRENT_LIMIT_AMPS 1.0f
 #define POWER_MAIN_BUCK_START_OUTPUT_MAX_VOLTS   3.0f
 #define POWER_MAIN_BUCK_MAX_DUTY                 0.95f
-
-/* MAIN forward Boost cold-start only; reverse Boost keeps its original limit. */
-#define POWER_MAIN_FORWARD_BOOST_START_CURRENT_LIMIT_AMPS 1.0f
 
 /* User-selected cold-start acceptance for the new bench image only.
  * Current is strictly below the limit; output voltage may equal its limit.

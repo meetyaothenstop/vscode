@@ -53,11 +53,11 @@ int main(void)
     period(0.0f, 12.0f, -0.3f);
     CHECK(power_status.fault == POWER_FAULT_START && power_status.fault_detail == 8U);
     /* Output residual, sampled overcurrent, and wrong-direction protection remain. */
-    stopped_samples(12.0f, 0.3f, 0.0f);
+    stopped_samples(12.0f, 3.05f, 0.0f);
     CHECK(!request(2U, 18.0f) && power_status.fault_detail == 6U);
     stopped_samples(12.0f, 0.0f, 0.0f);
     CHECK(request(2U, 18.0f));
-    period(12.0f, 0.3f, 0.0f);
+    period(12.0f, 3.05f, 0.0f);
     CHECK(power_status.fault == POWER_FAULT_START && power_status.fault_detail == 9U);
     stopped_samples(12.0f, 0.0f, 0.0f);
     CHECK(request(2U, 18.0f));
