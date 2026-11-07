@@ -6,6 +6,30 @@ HEX为`MDK-ARM/bidreaction/bidreaction.hex`。保留正向Buck/Boost及反向Buc
 
 ## 当前版本
 
+2026-11-07：已将正反向菜单的默认输入、输出电压统一到
+[`Core/Inc/power_build_config.h`](Core/Inc/power_build_config.h)的`Power-on menu defaults`段。
+主工程只修改`#if POWER_MAIN_APPLICATION`下面相邻的四个宏：
+
+```c
+#define POWER_FORWARD_DEFAULT_INPUT_VOLTS  24U
+#define POWER_FORWARD_DEFAULT_OUTPUT_VOLTS 12U
+#define POWER_REVERSE_DEFAULT_INPUT_VOLTS  12U
+#define POWER_REVERSE_DEFAULT_OUTPUT_VOLTS  6U
+```
+
+菜单初始化直接引用这些宏；调试邮箱`power_target_volts`仍默认取正向输出值。
+输入设定用于菜单选择Buck/Boost，实际输入仍由ADC测量；这里的默认值不是软启动斜坡起点。
+四个数值与整理前相同，bench和历史配置的默认值也保持。
+主/bench ARM6.18重建均0错误0警告，两个HEX分别与整理前逐字节一致，运行镜像仍为ADG2。
+主工程、普通配置、12V bench和24V FAST bench的菜单对象文件也分别与整理前一致。
+完整主机回归71组通过。
+修改位置、配置差异和验证记录见[默认电压配置整理](docs/默认电压配置整理-20261107.md)。
+
+用户本次反馈反向Buck已能正常从36V降至6V；本次未补充负载、运行时长或同步波形。
+该反馈不扩展为全范围、实板最坏时序或硬件OCP验证；历史故障1/4/16的物理根因和调试连接状态未重新核验。
+
+## ADG2版本历史
+
 2026-11-04：当前为**MAIN ADG2 启动ADC入口时序定位候选**，首页`MAIN ADC ADG2 50/10`、参数页`M-ADG2`，事件版本4。
 ADG1补充实板记录：ADC1入口0x1（仅ADRDY）、ADC2入口0xF（有EOC/EOS且无OVR）、reason1；用户确认持续运行，只按板上START。
 冷启动BOOTSTRAP剩余30，正常闭环尚未投入。已在真实后端的合成迟到时序中复现相同标志/阶段；这不是实板迟到或物理根因的证明。

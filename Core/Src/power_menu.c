@@ -14,8 +14,8 @@ void Menu_Init(PowerMenu *menu)
     memset(menu, 0, sizeof(*menu));
     menu->settings[MENU_FORWARD] = (MenuSettings){POWER_FORWARD_DEFAULT_INPUT_VOLTS,
                                                 POWER_FORWARD_DEFAULT_OUTPUT_VOLTS};
-    menu->settings[MENU_REVERSE] = (MenuSettings){POWER_MAIN_APPLICATION ? 12U : 36U,
-                                               POWER_MAIN_APPLICATION ? 6U : 12U};
+    menu->settings[MENU_REVERSE] = (MenuSettings){POWER_REVERSE_DEFAULT_INPUT_VOLTS,
+                                               POWER_REVERSE_DEFAULT_OUTPUT_VOLTS};
 }
 
 MenuMode Menu_Mode(const PowerMenu *menu)

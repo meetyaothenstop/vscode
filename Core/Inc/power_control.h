@@ -102,7 +102,7 @@ extern volatile PowerDiagnostics power_diag;
 
 /* Debugger mailbox. Main loop consumes the command once. */
 extern volatile uint32_t power_command;
-extern volatile float power_target_volts; /* default 36 V */
+extern volatile float power_target_volts; /* POWER_FORWARD_DEFAULT_OUTPUT_VOLTS */
 extern volatile PowerStatus power_status;
 
 /* Call after ADC calibration and MX_HRTIM1_Init. Outputs remain disabled. */
