@@ -175,12 +175,13 @@ static void test_all_four_ui_actions(void)
         setup();
         if (cases[i].reverse) key(2);
         key(3);
-        if (cases[i].boost) {
-            edit(-100); /* Nominal input to 12 V. */
-            key(2);
-            edit(100); /* Output to 36 V. */
-            key(2);
-        } else key(1);
+        /* Select each test operating point independently of editable defaults. */
+        edit(-100); /* Input to 12 V. */
+        if (!cases[i].reverse && !cases[i].boost) edit(12); /* Forward Buck: 24 V. */
+        key(2);
+        edit(-100); /* Output to zero, then the explicit case target. */
+        edit((int)cases[i].target);
+        key(2);
         unsigned before = page_calls;
         key(3);
         assert(starts == 1U && last_mode == cases[i].mode && last_target == cases[i].target);
@@ -223,7 +224,7 @@ static void test_running_frame_cadence_busy_stop_and_fault_restart(void)
 #else
     assert(strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? (POWER_OLED_FRAME_RESUME ? (POWER_ADC_FAULT_DETAILS ? "MAIN HW ADG2 50/10" : "MAIN HW FRM1 50/10") : "MAIN HW EVT1 50/10") : "MAIN HW RAW1 50/10") : "MAIN HW I50 V10") : "MAIN HW GUARD 6A")));
 #endif
-    key(3); key(1); key(3);
+    key(3); key(2); edit(-100); edit(6); key(2); key(3); /* Explicit Buck output. */
     pending = 0U;
     power_status.state = POWER_RUNNING;
     service(0U);

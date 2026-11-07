@@ -6,24 +6,39 @@ HEX为`MDK-ARM/bidreaction/bidreaction.hex`。保留正向Buck/Boost及反向Buc
 
 ## 当前版本
 
-2026-11-07：已将正反向菜单的默认输入、输出电压统一到
+2026-11-07：按用户要求，MAIN正向Boost的冷启动电流检查从0.25A改为**绝对值小于1A**，
+请求接受检查和待启动/自举/装载阶段复查共用同一门限。
+配置入口为[`Core/Inc/power_build_config.h`](Core/Inc/power_build_config.h)中的
+`POWER_MAIN_FORWARD_BOOST_START_CURRENT_LIMIT_AMPS`。
+反向Boost仍为0.25A；正反向Buck仍为1A。Boost启动输出残压仍需≤0.25V，
+电流参考6A、采样过流7.5A、方向/ADC/时序保护及150/50/10kHz频率保持。
+这只是启动允许条件调整，不是故障128 S8的物理根因结论。
+
+保留用户已设置的正向默认12V→18V、反向默认12V→6V。
+主/bench ARM6.18构建均0错误0警告，bench HEX保持；主镜像已更新，标识仍为`MAIN ADC ADG2 50/10`、`M-ADG2`。
+主HEX SHA256：`9E0A07792B71EB3AC647C6E1BCC675AB0829AFA8352D223EFE4F90DE43CD4CB0`。
+73组完整主机回归通过，独立只读审查无需修正的问题。
+修改前12→18V基线`3ad070f`已用`pre-forward-boost-start1a-20261107`上传核对，
+本版标签`main-forward-boost-start1a-20261107`。验证及范围见[正向Boost启动1A](docs/正向Boost启动1A-20261107.md)。
+由用户下载；本次没有操作板子，未证明实板S8消除、稳压、最坏时序或硬件OCP接线。
+
+## 默认电压设置
+
+正反向菜单的默认输入、输出电压统一在
 [`Core/Inc/power_build_config.h`](Core/Inc/power_build_config.h)的`Power-on menu defaults`段。
-主工程只修改`#if POWER_MAIN_APPLICATION`下面相邻的四个宏：
+主工程修改`#if POWER_MAIN_APPLICATION`下面相邻的四个宏：
 
 ```c
-#define POWER_FORWARD_DEFAULT_INPUT_VOLTS  24U
-#define POWER_FORWARD_DEFAULT_OUTPUT_VOLTS 12U
+#define POWER_FORWARD_DEFAULT_INPUT_VOLTS  12U
+#define POWER_FORWARD_DEFAULT_OUTPUT_VOLTS 18U
 #define POWER_REVERSE_DEFAULT_INPUT_VOLTS  12U
 #define POWER_REVERSE_DEFAULT_OUTPUT_VOLTS  6U
 ```
 
 菜单初始化直接引用这些宏；调试邮箱`power_target_volts`仍默认取正向输出值。
 输入设定用于菜单选择Buck/Boost，实际输入仍由ADC测量；这里的默认值不是软启动斜坡起点。
-四个数值与整理前相同，bench和历史配置的默认值也保持。
-主/bench ARM6.18重建均0错误0警告，两个HEX分别与整理前逐字节一致，运行镜像仍为ADG2。
-主工程、普通配置、12V bench和24V FAST bench的菜单对象文件也分别与整理前一致。
-完整主机回归71组通过。
-修改位置、配置差异和验证记录见[默认电压配置整理](docs/默认电压配置整理-20261107.md)。
+先前集中配置时的等价性验证见[默认电压配置整理](docs/默认电压配置整理-20261107.md)；
+当时的正向默认24→12V随后已由用户改为当前12→18V，并用`3ad070f`保存。
 
 用户本次反馈反向Buck已能正常从36V降至6V；本次未补充负载、运行时长或同步波形。
 该反馈不扩展为全范围、实板最坏时序或硬件OCP验证；历史故障1/4/16的物理根因和调试连接状态未重新核验。

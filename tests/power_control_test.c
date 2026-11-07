@@ -1365,13 +1365,13 @@ static void main_forward_startup1a3v(void)
                    accepted_current[n] * ADC_CURRENT_AMPS_PER_COUNT - ADC_CURRENT_ZERO_AMPS);
         CHECK(power_status.state == POWER_RUNNING && !power_status.fault);
     }
-    /* Reverse Buck now shares1A/3V; Boost must retain its original limits. */
+    /* Reverse Buck shares1A/3V; forward Boost now permits1A but keeps0.25V. */
     stopped_samples(0.0f, 36.0f, -1.05f);
     CHECK(!request(3U, 18.0f) && power_status.fault_detail == 5U);
     stopped_samples(3.05f, 36.0f, 0.0f);
     CHECK(!request(3U, 18.0f) && power_status.fault_detail == 6U);
     stopped_samples(12.0f, 0.0f, 0.3f);
-    CHECK(!request(2U, 36.0f) && power_status.fault_detail == 5U);
+    CHECK(request(2U, 36.0f));
     stopped_samples(12.0f, 0.3f, 0.0f);
     CHECK(!request(2U, 36.0f) && power_status.fault_detail == 6U);
     puts("Main forward startup:36->18V, |IL|<1A/output<=3V, request/IRQ raw edges, all cold phases, first fault and other-mode isolation: PASS");
@@ -1526,7 +1526,7 @@ static void main_mode_protection(void)
             period(mode >= 3U ? residual : source, mode >= 3U ? source : residual, mode >= 3U ? -current : current);
         CHECK(power_status.state == POWER_RUNNING);
         stopped_samples(mode >= 3U ? 0.0f : source, mode >= 3U ? source : 0.0f, mode >= 3U ? -0.5f : 0.5f);
-        power_status.il = mode == 1U ? 1.0f : (mode == 3U ? -1.0f : (mode >= 3U ? -0.5f : 0.5f));
+        power_status.il = mode <= 2U ? 1.0f : (mode == 3U ? -1.0f : -0.5f);
         CHECK(!request(mode, target) && power_status.fault_detail == 5U);
         start_running(mode, source, target);
         const float threshold = (mode == 1U || mode == 3U) ? 18.0f : 39.6f;

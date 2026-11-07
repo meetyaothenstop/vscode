@@ -155,6 +155,9 @@
 #define POWER_MAIN_BUCK_START_OUTPUT_MAX_VOLTS   3.0f
 #define POWER_MAIN_BUCK_MAX_DUTY                 0.95f
 
+/* MAIN forward Boost cold-start only; reverse Boost keeps its original limit. */
+#define POWER_MAIN_FORWARD_BOOST_START_CURRENT_LIMIT_AMPS 1.0f
+
 /* User-selected cold-start acceptance for the new bench image only.
  * Current is strictly below the limit; output voltage may equal its limit.
  * These are not the running overcurrent or HOLD-resume thresholds. */

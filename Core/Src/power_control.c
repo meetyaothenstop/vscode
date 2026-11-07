@@ -559,6 +559,10 @@ int Power_RequestStart(unsigned mode, float target_volts)
     float vout = reverse ? left : power_status.v_right;
 #endif
     float start_current_limit = MODE_LIMIT(mode, START_CURRENT_LIMIT_AMPS);
+#if POWER_MAIN_APPLICATION
+    if (mode == 2U)
+        start_current_limit = POWER_MAIN_FORWARD_BOOST_START_CURRENT_LIMIT_AMPS;
+#endif
     float start_output_max = MODE_LIMIT(mode, START_OUTPUT_MAX_VOLTS);
     if (power_status.state != POWER_STOPPED || start_pending != 0U) DIAG_REQUEST_RETURN(0);
     power_status.protection_ready = (uint32_t)PowerProtection_IsReady();

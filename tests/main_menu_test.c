@@ -40,10 +40,10 @@ static void test_bounds_and_whole_volt_steps(void)
     for (MenuDirection direction = MENU_FORWARD; direction <= MENU_REVERSE; ++direction) {
         PowerMenu menu;
         setup(&menu, direction);
-        assert(menu.settings[MENU_FORWARD].input_volts == 24U);
-        assert(menu.settings[MENU_FORWARD].output_volts == 12U);
-        assert(menu.settings[MENU_REVERSE].input_volts == 12U);
-        assert(menu.settings[MENU_REVERSE].output_volts == 6U);
+        assert(menu.settings[MENU_FORWARD].input_volts == POWER_FORWARD_DEFAULT_INPUT_VOLTS);
+        assert(menu.settings[MENU_FORWARD].output_volts == POWER_FORWARD_DEFAULT_OUTPUT_VOLTS);
+        assert(menu.settings[MENU_REVERSE].input_volts == POWER_REVERSE_DEFAULT_INPUT_VOLTS);
+        assert(menu.settings[MENU_REVERSE].output_volts == POWER_REVERSE_DEFAULT_OUTPUT_VOLTS);
         edit(&menu, -100);
         assert(menu.settings[direction].input_volts == 12U);
         edit(&menu, 1);
@@ -83,6 +83,7 @@ static void test_identity_and_full_width_headers(void)
     assert(strstr(frame.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? (POWER_OLED_FRAME_RESUME ? (POWER_ADC_FAULT_DETAILS ? "MAIN HW ADG2 50/10" : "MAIN HW FRM1 50/10") : "MAIN HW EVT1 50/10") : "MAIN HW RAW1 50/10") : "MAIN HW I50 V10") : "MAIN HW GUARD 6A")));
 #endif
     press(&menu, MENU_KEY_OK);
+    menu.settings[MENU_FORWARD] = (MenuSettings){24U, 12U};
     Menu_Render(&menu, &data, &frame);
     assert(strstr(frame.rows[0], POWER_UNIFIED_DIAGNOSTICS ? "FORWARD BUCK M-DIAG" : (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? (POWER_OLED_FRAME_RESUME ? (POWER_ADC_FAULT_DETAILS ? "FORWARD BUCK M-ADG2" : "FORWARD BUCK M-FRM1") : "FORWARD BUCK M-EVT1") : "FORWARD BUCK M-RAW1") : "FORWARD BUCK M-50/10") : "FORWARD BUCK M-RRES1")));
     menu.settings[MENU_FORWARD] = (MenuSettings){12U, 36U};
@@ -103,6 +104,8 @@ static void test_four_modes_equal_and_zero_off(void)
     for (MenuDirection direction = MENU_FORWARD; direction <= MENU_REVERSE; ++direction) {
         PowerMenu menu;
         setup(&menu, direction);
+        menu.settings[direction] = direction == MENU_FORWARD ?
+            (MenuSettings){24U, 12U} : (MenuSettings){12U, 6U};
         press(&menu, MENU_KEY_UP); /* Start/stop selection. */
         MenuRequest request = press(&menu, MENU_KEY_OK);
         assert(request.action == MENU_ACTION_START && request.mode == MENU_MODE_BUCK);
