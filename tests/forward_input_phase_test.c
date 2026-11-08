@@ -28,21 +28,21 @@ int main(void)
     cold_boot();
     for(unsigned mode=1;mode<=2;mode++) {
         /* Both request paths must choose late input even if ADC1 is low. */
-        stopped_samples(12,0,0);sample(9.9f,12,0,VALID_LATE);
+        stopped_samples(12,0,0);sample(8.9f,12,0,VALID_LATE);
         CHECK(request(mode,mode==1?6:18));
-        stopped_samples(12,0,0);sample(12,9.9f,0,VALID_LATE);
+        stopped_samples(12,0,0);sample(12,8.9f,0,VALID_LATE);
         CHECK(!request(mode,mode==1?6:18) && power_status.fault_detail==4);
         for(unsigned bad=0;bad<4;bad++) {
             stopped_samples(12,0,0);sample(12,12,0,invalid[bad]);
             CHECK(!request(mode,mode==1?6:18) && power_status.fault_detail==2);
         }
         for(unsigned phase=0;phase<6;phase++) {
-            start(mode,phases[phase]);sample(9.9f,12,0,VALID_LATE);worker();
+            start(mode,phases[phase]);sample(8.9f,12,0,VALID_LATE);worker();
             CHECK(!power_status.fault && power_status.raw_vh==raw_voltage(12,ADC_LEFT_VOLTAGE_GAIN));
             CHECK(Power_SamplesAreValid());
-            start(mode,phases[phase]);sample(12,9.9f,0,VALID_LATE);
+            start(mode,phases[phase]);sample(12,8.9f,0,VALID_LATE);
             CHECK(power_status.fault==POWER_FAULT_INPUT && enabled_outputs==0);
-            CHECK(fabsf(power_status.fault_input_volts-9.9f)<0.02f);
+            CHECK(fabsf(power_status.fault_input_volts-8.9f)<0.02f);
             for(unsigned bad=0;bad<4;bad++) {
                 start(mode,phases[phase]);sample(12,12,0,invalid[bad]);
                 CHECK(power_status.fault==POWER_FAULT_ADC && !Power_SamplesAreValid());
@@ -63,14 +63,14 @@ int main(void)
         start(2,33);
 #if POWER_MULTIRATE_CONTROL
         for(unsigned n=0;n<600 && power_status.state!=POWER_CHANGEOVER;n++) {
-            sample(9.9f,12,11.99f,VALID_LATE);worker();CHECK(!power_status.fault);
+            sample(8.9f,12,11.99f,VALID_LATE);worker();CHECK(!power_status.fault);
         }
         CHECK(power_status.state==POWER_CHANGEOVER && enabled_outputs==0);
 #else
         /* The legacy synchronous forward backend has no external
          * POWER_CHANGEOVER state; retain its existing controller delay. */
         for(unsigned n=0;n<600 && !forward_Y.BOOST_RUN;n++) {
-            sample(9.9f,12,11.99f,VALID_LATE);CHECK(!power_status.fault);
+            sample(8.9f,12,11.99f,VALID_LATE);CHECK(!power_status.fault);
         }
         CHECK(forward_Y.BOOST_RUN && power_status.state==POWER_RUNNING);
 #endif

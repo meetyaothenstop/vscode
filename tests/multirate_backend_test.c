@@ -47,7 +47,7 @@ int main(void)
     CHECK(power_status.control_steps==101U && power_status.voltage_steps==21U);
     run_start(1U); worker(); irq(12,0,0,ADC_ISR_JEOS,1000,8000);
     CHECK(power_status.fault==0U); /*normal permissible entry phase*/
-    const float bad[][3]={{9.9f,0,0},{42.1f,0,0},{12,9.1f,0},{12,0,-1.1f}};
+    const float bad[][3]={{8.9f,0,0},{42.1f,0,0},{12,9.1f,0},{12,0,-1.1f}};
     const uint32_t faults[]={POWER_FAULT_INPUT,POWER_FAULT_INPUT,POWER_FAULT_OUTPUT,POWER_FAULT_REVERSE};
     for(unsigned n=0;n<4;n++) {
         run_start(1U); worker(); period(bad[n][0],bad[n][1],bad[n][2]);

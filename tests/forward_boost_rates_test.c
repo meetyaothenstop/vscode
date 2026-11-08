@@ -79,7 +79,7 @@ int main(void)
         worker(); CHECK(enabled_outputs==0);
         start_mode(2);worker();
         for(unsigned n=1;n<phase;n++)period(12,0,0);
-        period(9.9f,0,0);CHECK(power_status.fault==POWER_FAULT_INPUT && enabled_outputs==0);
+        period(8.9f,0,0);CHECK(power_status.fault==POWER_FAULT_INPUT && enabled_outputs==0);
         worker(); CHECK(enabled_outputs==0);
     }
     model();

@@ -6,6 +6,19 @@ HEX为`MDK-ARM/bidreaction/bidreaction.hex`。保留正向Buck/Boost及反向Buc
 
 ## 当前版本
 
+2026-11-08：按用户要求，将MAIN共用输入欠压门限**10V降至9V**，输入保护窗口为9～42V。
+适用于正向Buck、正向Boost和反向Buck；请求检查与后续各阶段保护共用
+`Core/Inc/power_build_config.h`的`POWER_MAIN_BUCK_INPUT_MIN_VOLTS=9.0f`。
+反向Boost保持6～40V，受限bench策略及HEX保持；Buck原占空比/目标可达性检查仍生效。
+保留本次工作区已有的正向**12→24V**默认设置（上版为18V输出），反向仍12→6V。
+ADC2固定4.8us输入采样、Boost25/5kHz及其余50/10kHz、150kHz快速保护保持，页面标识仍B25A2。
+81组完整主机回归及审查后定向边界测试通过；主/bench ARM6.18构建0错误0警告，实际镜像核验通过。
+主HEX SHA256：`96CDC014A36699EF721FAFF97398E8ECA5BEA6910E376F3F5E238CCB614973BD`。
+修改前4a3b4bd已用`pre-main-uv9-20261108`上传核对，版本标签`main-uv9-20261108`。
+验证见[9V欠压测试](docs/主工程欠压9V测试-20261108.md)。用户自行下载并使用配套AXF；不宣称采样噪声或实板T7已解决。
+
+## 正向统一ADC2历史
+
 2026-11-08：按用户要求，将MAIN**正向Buck和Boost的输入电压统一到ADC2/PA0延后采样**，版本`B25A2`。
 固定在PWM周期起点后4.8us触发，配置为`Core/Inc/power_build_config.h`中的`POWER_INPUT_ADC_PHASE_TICKS=23040U`。
 请求快照、有效性、自举/装载/预充/换向/运行保护和worker使用同一来源；ADC2无效则拒绝启动或关断，无ADC1回退。
@@ -83,7 +96,7 @@ mode2每6个PWM请求后台计算，T7窗口由20us变为40us，超期仍关断�
 
 ```c
 #define POWER_FORWARD_DEFAULT_INPUT_VOLTS  12U
-#define POWER_FORWARD_DEFAULT_OUTPUT_VOLTS 18U
+#define POWER_FORWARD_DEFAULT_OUTPUT_VOLTS 24U
 #define POWER_REVERSE_DEFAULT_INPUT_VOLTS  12U
 #define POWER_REVERSE_DEFAULT_OUTPUT_VOLTS  6U
 ```
@@ -91,7 +104,7 @@ mode2每6个PWM请求后台计算，T7窗口由20us变为40us，超期仍关断�
 菜单初始化直接引用这些宏；调试邮箱`power_target_volts`仍默认取正向输出值。
 输入设定用于菜单选择Buck/Boost，实际输入仍由ADC测量；这里的默认值不是软启动斜坡起点。
 先前集中配置时的等价性验证见[默认电压配置整理](docs/默认电压配置整理-20261107.md)；
-当时的正向默认24→12V随后已由用户改为当前12→18V，并用`3ad070f`保存。
+当时的正向默认24→12V随后改为12→18V，并用`3ad070f`保存；本次保留工作区已设置的12→24V默认。
 
 用户本次反馈反向Buck已能正常从36V降至6V；本次未补充负载、运行时长或同步波形。
 该反馈不扩展为全范围、实板最坏时序或硬件OCP验证；历史故障1/4/16的物理根因和调试连接状态未重新核验。

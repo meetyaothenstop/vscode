@@ -120,7 +120,7 @@
  * The debug mailbox also defaults to the forward output setting. */
 #if POWER_MAIN_APPLICATION
 #define POWER_FORWARD_DEFAULT_INPUT_VOLTS  12U
-#define POWER_FORWARD_DEFAULT_OUTPUT_VOLTS 18U
+#define POWER_FORWARD_DEFAULT_OUTPUT_VOLTS 24U
 #define POWER_REVERSE_DEFAULT_INPUT_VOLTS  12U
 #define POWER_REVERSE_DEFAULT_OUTPUT_VOLTS  6U
 #elif POWER_BENCH_12V_BUCK_TEST
@@ -146,7 +146,7 @@
 #define POWER_MAIN_INPUT_SETTING_MAX           40U
 #define POWER_MAIN_OUTPUT_SETTING_MIN           0U
 #define POWER_MAIN_OUTPUT_SETTING_MAX          36U
-#define POWER_MAIN_BUCK_INPUT_MIN_VOLTS        10.0f
+#define POWER_MAIN_BUCK_INPUT_MIN_VOLTS         9.0f
 #define POWER_MAIN_BUCK_INPUT_MAX_VOLTS        42.0f
 #define POWER_MAIN_BUCK_MAX_TARGET_VOLTS       36.0f
 /* Shared by MAIN Buck directions and forward Boost, per user request. */

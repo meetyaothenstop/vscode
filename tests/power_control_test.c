@@ -1175,7 +1175,7 @@ static void main_four_modes_and_invalid_requests(void)
 
 static void main_buck_limits_and_reachability(void)
 {
-    const float exact[] = {10.0f, 42.0f, 9.999f, 42.001f};
+    const float exact[] = {9.0f, 42.0f, 8.999f, 42.001f};
     for (unsigned mode = 1U; mode <= 3U; mode += 2U) {
         for (unsigned n = 0U; n < 4U; ++n) {
             stopped_samples(mode == 1U ? 24.0f : 0.0f, mode == 1U ? 0.0f : 24.0f, 0.0f);
@@ -1204,7 +1204,7 @@ static void main_buck_limits_and_reachability(void)
         expect_fault(POWER_FAULT_INPUT);
         CHECK(HRTIM1->sCommonRegs.OENR == 0U);
     }
-    const float outside[] = {9.9f, 42.1f};
+    const float outside[] = {8.9f, 42.1f};
     for (unsigned mode = 1U; mode <= 3U; mode += 2U) {
         for (unsigned n = 0U; n < 2U; ++n) {
             start_running(mode, 24.0f, 6.0f);
@@ -1219,9 +1219,9 @@ static void main_buck_limits_and_reachability(void)
     }
     for (unsigned mode = 1U; mode <= 3U; mode += 2U) {
         const float gain = mode == 1U ? ADC_LEFT_VOLTS_PER_COUNT : ADC_RIGHT_VOLTS_PER_COUNT;
-        const unsigned lower_raw = (unsigned)floorf(10.0f / gain);
+        const unsigned lower_raw = (unsigned)floorf(9.0f / gain);
         const unsigned upper_raw = (unsigned)floorf(42.0f / gain);
-        CHECK(lower_raw * gain < 10.0f && (lower_raw + 1U) * gain >= 10.0f);
+        CHECK(lower_raw * gain < 9.0f && (lower_raw + 1U) * gain >= 9.0f);
         CHECK(upper_raw * gain <= 42.0f && (upper_raw + 1U) * gain > 42.0f);
         const unsigned inside[] = {lower_raw + 1U, upper_raw};
         const unsigned outside_raw[] = {lower_raw, upper_raw + 1U};
@@ -1236,7 +1236,7 @@ static void main_buck_limits_and_reachability(void)
             CHECK((mode == 1U ? power_status.fault_raw_vh : power_status.fault_raw_vl) == outside_raw[edge]);
         }
     }
-    puts("Main Buck: nominal12/24/40, sampled10..42,36V, forward.95 reachability and every preparation sag: PASS");
+    puts("Main Buck: nominal12/24/40, sampled9..42,36V, forward.95 reachability and every preparation sag: PASS");
 }
 
 static void main_forward_ovp_bounds(void)
@@ -1398,8 +1398,8 @@ static void main_reverse_buck12(void)
     CHECK(power_status.fault_raw_vh == first.fault_raw_vh);
     CHECK(request(3U, 0.0f) && power_status.fault == POWER_FAULT_OUTPUT);
     start_running(3U, 12.0f, 6.0f);
-    period(0.0f, 9.9f, 0.0f); expect_fault(POWER_FAULT_INPUT);
-    CHECK(fabsf(power_status.fault_input_volts - 9.9f) < 0.02f);
+    period(0.0f, 8.9f, 0.0f); expect_fault(POWER_FAULT_INPUT);
+    CHECK(fabsf(power_status.fault_input_volts - 8.9f) < 0.02f);
     start_running(3U, 12.0f, 6.0f);
     period(0.0f, 42.1f, 0.0f); expect_fault(POWER_FAULT_INPUT);
     const unsigned prep[] = {0U, 1U, 30U, 31U, 32U};
@@ -1424,7 +1424,7 @@ static void main_reverse_buck12(void)
     CHECK(Power_IsStartPending());
     for (unsigned n = 0U; n < 33U; ++n) period(0.0f, 12.0f, 0.0f);
     CHECK(power_status.state == POWER_RUNNING && reverse_U.mode == 3.0f);
-    puts("MAIN reverse12->6: right input10..42V, left OVP9V, startup1A/3V all stages, negative current7.5A, first fault and zero OFF: PASS");
+    puts("MAIN reverse12->6: right input9..42V, left OVP9V, startup1A/3V all stages, negative current7.5A, first fault and zero OFF: PASS");
 }
 
 /* Catch a low-side enable stacked onto the late recovery calculation, a
@@ -1494,7 +1494,7 @@ static void main_reverse_staged_resume(void)
                               POWER_FAULT_OUTPUT, POWER_FAULT_CURRENT};
     for (unsigned kind = 0U; kind < 4U; ++kind) {
         main_reverse_prepare_resume();
-        irq(kind == 2U ? 9.1f : 4.3f, kind == 1U ? 9.9f : 12.0f,
+        irq(kind == 2U ? 9.1f : 4.3f, kind == 1U ? 8.9f : 12.0f,
             kind == 3U ? -7.6f : 0.0f, kind == 0U ? 0U : ADC_ISR_JEOS, 1000U, 640U);
         expect_fault(faults[kind]);
         CHECK(HRTIM1->sCommonRegs.OENR == 0U);

@@ -11,11 +11,11 @@ int main(void)
         int buck=mode==1||mode==3;
         int shared=mode!=4;
         float target=targets[t],ov=shared?fminf(40,fmaxf(6,target*1.5f)):target*1.1f;
-        RawPolicy p; RawPolicy_Build(&p,mode,target,shared?10:6,shared?42:40,ov,shared?1.0f:0.25f,shared?3:0.25f);
+        RawPolicy p; RawPolicy_Build(&p,mode,target,shared?9:6,shared?42:40,ov,shared?1.0f:0.25f,shared?3:0.25f);
         for(unsigned r=0;r<4096;r++) {
             float i=(float)r*ADC_CURRENT_AMPS_PER_COUNT-ADC_CURRENT_ZERO_AMPS;
             float v=(float)r*gain,vin=(float)r*igain;
-            assert(Raw_Contains(p.input,r)==(vin>=(shared?10:6)&&vin<=(shared?42:40)&&(!buck||!(target>vin*POWER_MAIN_BUCK_MAX_DUTY))));
+            assert(Raw_Contains(p.input,r)==(vin>=(shared?9:6)&&vin<=(shared?42:40)&&(!buck||!(target>vin*POWER_MAIN_BUCK_MAX_DUTY))));
             assert(Raw_Contains(p.output,r)==!(v>ov));
             assert(Raw_Contains(p.current,r)==(fabsf(i)<7.5f&&r>5&&r<4090));
             assert(Raw_Contains(p.start_current,r)==(fabsf(i)<(shared?1.0f:0.25f)));

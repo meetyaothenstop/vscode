@@ -11,9 +11,48 @@ static void run_forward_boost(float target)
     CHECK(power_status.state == POWER_RUNNING && enabled_outputs == ALL_OUTPUTS);
 }
 
+static void main_uv9_boundaries(void)
+{
+    const unsigned phases[]={0U,1U,30U,31U,32U,33U};
+    for(unsigned mode=1;mode<=3;mode++) {
+        const unsigned reverse=mode==3U;
+        const float target=mode==2U?18.0f:6.0f;
+        const float gain=reverse?ADC_RIGHT_VOLTS_PER_COUNT:ADC_LEFT_VOLTS_PER_COUNT;
+        const unsigned below=(unsigned)floorf(9.0f/gain);
+        CHECK(below*gain<9.0f && (below+1U)*gain>=9.0f);
+        /*9..10V must qualify both request and every fresh startup/run sample.*/
+        stopped_samples(reverse?0:9.9f,reverse?9.9f:0,0);CHECK(request(mode,target));
+        for(unsigned p=0;p<6;p++) {
+            for(unsigned low=0;low<2;low++) {
+                stopped_samples(reverse?0:12,reverse?12:0,0);CHECK(request(mode,target));
+                for(unsigned n=0;n<phases[p];n++)period(reverse?0:12,reverse?12:0,0);
+                const float input=low?8.9f:9.1f;
+                period(reverse?0:input,reverse?input:0,0);
+                if(low)CHECK(power_status.fault==POWER_FAULT_INPUT && enabled_outputs==0);
+                else CHECK(!power_status.fault);
+            }
+        }
+        for(unsigned edge=0;edge<2;edge++) {
+            float input=(below+edge)*gain;
+            stopped_samples(reverse?0:input,reverse?input:0,0);
+            CHECK(request(mode,target)==(edge==1U));
+            if(!edge)CHECK(power_status.fault_detail==4U);
+        }
+        stopped_samples(reverse?0:12,reverse?12:0,0);CHECK(request(mode,target));
+        for(unsigned n=0;n<33;n++)period(reverse?0:12,reverse?12:0,0);
+        float input=(below+1U)*gain;
+        period(reverse?0:input,reverse?input:0,0);CHECK(!power_status.fault);
+        input=below*gain;
+        period(reverse?0:input,reverse?input:0,0);
+        CHECK(power_status.fault==POWER_FAULT_INPUT && enabled_outputs==0);
+        CHECK((reverse?power_status.fault_raw_vl:power_status.fault_raw_vh)==below);
+    }
+}
+
 int main(void)
 {
     cold_boot();
+    main_uv9_boundaries();
     /* Catch applying 3 V only to the request, not to fresh cold-start samples. */
     for (unsigned sign = 0U; sign < 2U; ++sign) {
         float current = sign ? -0.98f : 0.98f;
@@ -47,7 +86,8 @@ int main(void)
     }
     /* Accept the new input window, but never turn Boost into Buck at startup. */
     const struct { float input, target; unsigned detail; } inputs[] = {
-        {9.9f, 18.0f, 4U}, {10.1f, 18.0f, 0U}, {35.0f, 36.0f, 0U},
+        {8.9f, 18.0f, 4U}, {9.1f, 18.0f, 0U}, {9.9f, 18.0f, 0U},
+        {10.1f, 18.0f, 0U}, {35.0f, 36.0f, 0U},
         {41.0f, 36.0f, 7U}, {42.1f, 36.0f, 4U},
         {12.0f, 11.9f, 7U}, {12.0f, 6.0f, 7U}, {12.0f, 0.0f, 3U}
     };
@@ -74,6 +114,8 @@ int main(void)
     CHECK((power_status.fault & POWER_FAULT_INPUT) != 0U);
     run_forward_boost(18.0f);
     period(9.9f, 0.0f, 0.0f);
+    CHECK(power_status.fault == 0U);
+    period(8.9f, 0.0f, 0.0f);
     CHECK((power_status.fault & POWER_FAULT_INPUT) != 0U);
     const struct { float target, trip; } ovp[] = {
         {18.0f, 27.0f}, {26.0f, 39.0f}, {27.0f, 40.0f}, {36.0f, 40.0f}
@@ -100,6 +142,6 @@ int main(void)
     CHECK(power_status.fault == 0U);
     period(19.9f, 12.0f, 0.0f);
     CHECK(power_status.fault == POWER_FAULT_OUTPUT);
-    puts("Forward Boost shares Buck electrical limits; cold3V, input10..42V, OVP1.5x/40V and reverse isolation: PASS");
+    puts("Forward Boost shares Buck electrical limits; cold3V, input9..42V, OVP1.5x/40V and reverse isolation: PASS");
     return 0;
 }
