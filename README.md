@@ -6,6 +6,25 @@ HEX为`MDK-ARM/bidreaction/bidreaction.hex`。保留正向Buck/Boost及反向Buc
 
 ## 当前版本
 
+2026-11-08：按用户要求，将MAIN**正向Buck和Boost的输入电压统一到ADC2/PA0延后采样**，版本`B25A2`。
+固定在PWM周期起点后4.8us触发，配置为`Core/Inc/power_build_config.h`中的`POWER_INPUT_ADC_PHASE_TICKS=23040U`。
+请求快照、有效性、自举/装载/预充/换向/运行保护和worker使用同一来源；ADC2无效则拒绝启动或关断，无ADC1回退。
+电流与输出电压继续原ADC1序列，反向模式保留ADC1语义。
+PWM/ADC/快速保护150kHz、Boost25/5kHz、其余模式50/10kHz和10V欠压等全部门限保持。
+首页`MAIN ADC B25/5 A2`，正向Boost页`FORWARD BOOST B25A2`，默认仍12→18V。
+
+用户进一步明确关注开关沿干扰：当前4.8us为固定触发，**未动态随PWM占空比避开边沿**。
+例如Boost占空指令0.18时，右桥CMP1约4.8467us，仍会靠近触发点；实际还需考虑触发延迟、采样窗口及死区。
+本版不保证全工况避沿，也不宣称实板欠压或T7已消除。
+
+81组完整主机回归及独立只读审查通过；主/bench ARM6.18构建0错误0警告，bench HEX保持。
+实际HEX/CCM/整数快速路径/AXF导出核验通过。
+主HEX SHA256：`ABCB45F73628DA7D55C5817E744CDC62960BAD57533679889AE78101292829F7`。
+修改前`802b9ad`已用`pre-forward-input-adc2-20261108`上传并核对；版本标签`main-forward-input-adc2-20261108`。
+用户自行下载主工程HEX并使用配套AXF；验证及复测见[正向统一输入ADC2测试](docs/正向输入统一ADC2测试-20261108.md)。
+
+## 正向Boost25/5kHz历史
+
 2026-11-08：主工程正向Boost采用用户批准的**25kHz电流/5kHz电压计算**，版本`B25/5`。
 PWM、ADC及快速保护仍150kHz；正向Buck、反向Buck/Boost仍50/10kHz，唯一bench保持原150kHz控制。
 mode2每6个PWM请求后台计算，T7窗口由20us变为40us，超期仍关断；其余模式每3个PWM。

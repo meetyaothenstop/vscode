@@ -50,6 +50,9 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Independent Boost reference compile failed' }
     }
     $cases = @(
+        @{Name='forward_input_phase_raw_test'; Sources=@('tests/forward_input_phase_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function'))}
+        @{Name='forward_input_phase_float_test'; Sources=@('tests/forward_input_phase_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($mainFlags + @('-Itests/power_hal','-Wno-unused-function'))}
+        @{Name='forward_input_phase_float_multirate_test'; Sources=@('tests/forward_input_phase_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-DPOWER_RAW_FAST_IRQ=0','-Itests/power_hal','-Wno-unused-function'))}
         @{Name='forward_boost_rates_test'; Sources=@('tests/forward_boost_rates_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function'))}
         @{Name='forward_boost_equivalence_multirate_test'; Sources=@('tests/forward_boost_equivalence_test.c','Core/Src/forward.c',$boostMultiReferenceObject); Flags=$multirateFlags}
         @{Name='forward_boost_equivalence_single_test'; Sources=@('tests/forward_boost_equivalence_test.c','Core/Src/forward.c',$boostSingleReferenceObject); Flags=$mainFlags}

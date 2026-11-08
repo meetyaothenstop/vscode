@@ -39,7 +39,8 @@ int main(int argc,char **argv)
         puts("Raw sample and validity form one request epoch: PASS");return 0;
     }
     if(argc>1 && argv[1][0]=='2') {
-        stopped_samples(12,0,0);override_early_input=1U;early_input_raw=0U;period(12,0,0);
+        stopped_samples(12,0,0);override_early_input=1U;
+        early_input_raw=raw_voltage(12.0f,ADC_LEFT_VOLTAGE_GAIN);period(0,0,0);
         unmask_action=2U;CHECK(!request(2,24));CHECK(power_status.fault_detail==4U);
         CHECK(power_status.fault_raw_vh==0U && power_status.fault_raw_vl==raw_voltage(0,0.04666f));
         CHECK(power_status.fault_raw_il==raw_current(0));

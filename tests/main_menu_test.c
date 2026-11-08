@@ -73,7 +73,7 @@ static void test_identity_and_full_width_headers(void)
     press(&menu, MENU_KEY_BACK);
     Menu_Render(&menu, &data, &frame);
 #if POWER_MULTIRATE_CONTROL
-    assert(strstr(frame.rows[0], POWER_MAIN_ADC_SOFTWARE_ONLY ? "MAIN ADC B25/5" : "MAIN HW B25/5"));
+    assert(strstr(frame.rows[0], POWER_MAIN_ADC_SOFTWARE_ONLY ? "MAIN ADC B25/5 A2" : "MAIN HW B25/5 A2"));
 #elif POWER_UNIFIED_DIAGNOSTICS
     assert(strstr(frame.rows[0], POWER_MAIN_ADC_SOFTWARE_ONLY ?
                   "MAIN ADC DIAG 6A" : "MAIN HW DIAG 6A"));
@@ -88,7 +88,7 @@ static void test_identity_and_full_width_headers(void)
     assert(strstr(frame.rows[0], POWER_UNIFIED_DIAGNOSTICS ? "FORWARD BUCK M-DIAG" : (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? (POWER_OLED_FRAME_RESUME ? (POWER_ADC_FAULT_DETAILS ? "FORWARD BUCK M-ADG2" : "FORWARD BUCK M-FRM1") : "FORWARD BUCK M-EVT1") : "FORWARD BUCK M-RAW1") : "FORWARD BUCK M-50/10") : "FORWARD BUCK M-RRES1")));
     menu.settings[MENU_FORWARD] = (MenuSettings){12U, 36U};
     Menu_Render(&menu, &data, &frame);
-    assert(strstr(frame.rows[0], POWER_MULTIRATE_CONTROL ? "FORWARD BOOST B25/5" : POWER_UNIFIED_DIAGNOSTICS ? "FORWARD BOOST M-DIAG" : "FORWARD BOOST M-RRES1"));
+    assert(strstr(frame.rows[0], POWER_MULTIRATE_CONTROL ? "FORWARD BOOST B25A2" : POWER_UNIFIED_DIAGNOSTICS ? "FORWARD BOOST M-DIAG" : "FORWARD BOOST M-RRES1"));
     menu.direction = MENU_REVERSE;
     menu.settings[MENU_REVERSE] = (MenuSettings){36U, 36U};
     Menu_Render(&menu, &data, &frame);

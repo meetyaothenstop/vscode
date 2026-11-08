@@ -51,10 +51,12 @@ static PwmPlan resume_plan;
 /* MAIN reverse Buck separates late recovery calculation from low-side
  * enabling. Pending means POWER_BOOTSTRAP with every output still off. */
 static unsigned resume_bootstrap_pending;
-/* STOP telemetry uses the late input sample. Other modes must qualify and
- * run on the original ADC1 phase, even if the unused ADC2 sample is lost. */
+/* STOP and both forward modes use the same late input sample. Reverse
+ * modes retain ADC1 for the left output bus, even if unused ADC2 is lost. */
 static volatile unsigned early_sample_valid;
 static volatile float early_input_volts;
+static inline unsigned main_uses_late_input(unsigned mode)
+{ return mode == 1U || mode == 2U; }
 /* Electrical policy only: Boost voltage relation, ADC phase, sequence and
  * timing deadlines remain selected separately by the actual mode. */
 #define MAIN_SHARED_ELECTRICAL_LIMITS(mode) ((mode) == 1U || (mode) == 2U || (mode) == 3U)
@@ -544,9 +546,9 @@ int Power_RequestStart(unsigned mode, float target_volts)
     int boost = mode == 2U || mode == 4U;
 #if POWER_RAW_FAST_IRQ
     uint32_t snapshot_mask=__get_PRIMASK(); __disable_irq();
-    unsigned snapshot_left=mode==1U?power_status.raw_vh:early_input_raw;
+    unsigned snapshot_left=main_uses_late_input(mode)?power_status.raw_vh:early_input_raw;
     unsigned snapshot_right=power_status.raw_vl,snapshot_current=power_status.raw_il;
-    unsigned snapshot_samples=power_status.samples,snapshot_valid=mode==1U?sample_valid:early_sample_valid;
+    unsigned snapshot_samples=power_status.samples,snapshot_valid=main_uses_late_input(mode)?sample_valid:early_sample_valid;
     RawSnapshot request_sample={snapshot_left,snapshot_right,snapshot_current};
     __set_PRIMASK(snapshot_mask);
     float left=(float)snapshot_left*ADC_LEFT_VOLTS_PER_COUNT;
@@ -557,7 +559,7 @@ int Power_RequestStart(unsigned mode, float target_volts)
 #else
     float left = power_status.v_left;
 #if POWER_MAIN_APPLICATION
-    if (mode != 1U) left = early_input_volts;
+    if (!main_uses_late_input(mode)) left = early_input_volts;
 #endif
     float vin = reverse ? power_status.v_right : left;
     float vout = reverse ? left : power_status.v_right;
@@ -584,7 +586,7 @@ int Power_RequestStart(unsigned mode, float target_volts)
 #else
              power_status.samples < 2U ||
 #if POWER_MAIN_APPLICATION
-             !(mode == 1U ? sample_valid : early_sample_valid)
+             !(main_uses_late_input(mode) ? sample_valid : early_sample_valid)
 #else
              !sample_valid
 #endif
@@ -741,9 +743,9 @@ void Power_TimerIRQ(void)
     unsigned late_valid = (input_flags & (ADC_ISR_EOC | ADC_ISR_EOS | ADC_ISR_OVR)) ==
                           (ADC_ISR_EOC | ADC_ISR_EOS);
     unsigned use_late_input = (power_status.state == POWER_STOPPED && !start_pending) ||
-                              (active_mode == 1U && power_status.state != POWER_FAULT);
+                              (main_uses_late_input(active_mode) && power_status.state != POWER_FAULT);
     /* ADC2 runs in every mode. Drain it even on timing/ADC1 failure, so a
-     * later Buck request cannot accept an earlier period's sticky result. */
+     * later forward request cannot accept an earlier period's sticky result. */
     ADC2->ISR = ADC_ISR_EOC | ADC_ISR_EOS | ADC_ISR_OVR;
 #endif
     /* Analog hardware has already forced gates off. Catch even a short

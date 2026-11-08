@@ -86,3 +86,4 @@ __pycache__/
 /.superpowers/adcdiag/
 /tests/multirate_baseline.log
 /.superpowers/boost-t7-opt/
+/.superpowers/forward-input-adc2/

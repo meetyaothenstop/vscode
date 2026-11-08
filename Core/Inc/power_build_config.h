@@ -100,6 +100,8 @@
 #if POWER_BENCH_LATE_INPUT_ADC && !POWER_BENCH_FAST_BUCK
 #error Late input sampling is restricted to the FAST Buck bench.
 #endif
+/* MAIN forward Buck/Boost input: fixed trigger phase after period reset,
+ * independent of switching CMP1 edges; ADC1 current/output stay unchanged. */
 #define POWER_INPUT_ADC_PHASE_TICKS 23040U /* 4.8 us of the 6.667 us PWM period */
 
 /* Implementation capabilities, separate from restricted bench range/policy. */

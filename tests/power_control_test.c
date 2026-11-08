@@ -1586,8 +1586,8 @@ static void main_adc_mode_selection(void)
             override_early_input = 1U; next_input_flags = invalid[bad];
             period(mode >= 3U ? 20.0f : source, mode >= 3U ? source : 0.0f, 0.0f);
             CHECK(!Power_SamplesAreValid());
-            CHECK(request(mode, target) == (mode != 1U));
-            if (mode == 1U) { expect_fault(POWER_FAULT_START); continue; }
+            CHECK(request(mode, target) == (mode >= 3U));
+            if (mode <= 2U) { expect_fault(POWER_FAULT_START); continue; }
             /* A consumed ADC1 start must not be blocked by unused ADC2 errors. */
             for (unsigned k = 0; k < 34U; ++k) {
                 early_input_raw = raw_voltage(mode >= 3U ? 0.0f : source, ADC_LEFT_VOLTAGE_GAIN);
@@ -1622,12 +1622,12 @@ static void main_adc_mode_selection(void)
             0.0f, ADC_ISR_JEOS | ADC_ISR_JQOVF, 1000U, 640U);
         expect_fault(POWER_FAULT_ADC);
     }
-    puts("Main ADC: late forward Buck/STOP, early Boost/reverse qualification/run, unused ADC2 drain and consumed failures: PASS");
+    puts("Main ADC: late forward Buck/Boost/STOP, early reverse qualification/run, unused ADC2 drain and consumed failures: PASS");
 }
 
 static void main_stop_and_clear_require_fresh_sample(void)
 {
-    for (unsigned mode = 2U; mode <= 4U; ++mode) {
+    for (unsigned mode = 3U; mode <= 4U; ++mode) {
         const float source = mode & 1U ? 24.0f : 12.0f;
         const float target = mode & 1U ? 12.0f : 36.0f;
         start_running(mode, source, target);
