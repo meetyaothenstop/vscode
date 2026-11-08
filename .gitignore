@@ -85,3 +85,4 @@ __pycache__/
 /.superpowers/oled-frame/
 /.superpowers/adcdiag/
 /tests/multirate_baseline.log
+/.superpowers/boost-t7-opt/

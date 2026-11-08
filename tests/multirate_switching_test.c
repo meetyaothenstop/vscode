@@ -62,6 +62,7 @@ int main(void)
 {
     cold_boot();
     plant(1U,24.0,12.0); plant(2U,12.0,24.0);
+    plant(2U,12.0,18.0); /* Current board-test target, through the real worker. */
     plant(3U,12.0,6.0); plant(4U,12.0,24.0);
 #ifdef EXTENDED_PLANT
     plant(1U,12.0,1.0); plant(1U,12.0,6.0); plant(1U,12.0,11.0);

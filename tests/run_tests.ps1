@@ -18,7 +18,29 @@ try {
     $mainFlags = @('-DPOWER_MAIN_APPLICATION=1','-DPOWER_MAIN_ADC_SOFTWARE_ONLY=1','-DPOWER_MULTIRATE_CONTROL=0')
     $multirateFlags = @('-DPOWER_MAIN_APPLICATION=1','-DPOWER_MAIN_ADC_SOFTWARE_ONLY=1','-DPOWER_MULTIRATE_CONTROL=1')
     $mainDiagFlags = $mainFlags + @('-DPOWER_UNIFIED_DIAGNOSTICS=1')
+    # Independent pre-optimization source is pinned by the published backup tag.
+    $boostBaseline = 'pre-boost-t7-opt-20261107'
+    $baselineCommit = (& git rev-parse ($boostBaseline + '^{}')).Trim()
+    if ($LASTEXITCODE -ne 0 -or $baselineCommit -ne '307bcdd2b06b0e086968c88d3aa5e129c00e24e2') {
+        throw 'Fetch the published pre-boost-t7-opt-20261107 tag before running independent Boost equivalence tests'
+    }
+    $boostReferenceDir = Join-Path $projectRoot '.superpowers/boost-t7-opt/reference'
+    New-Item -ItemType Directory -Force -Path $boostReferenceDir | Out-Null
+    foreach ($source in @('forward.c','forward_step_impl.inc')) {
+        $baselineSource = @(& git show ($boostBaseline + ':Core/Src/' + $source))
+        if ($LASTEXITCODE -ne 0) { throw "Cannot read baseline source: $source" }
+        [IO.File]::WriteAllLines((Join-Path $boostReferenceDir $source), [string[]]$baselineSource, [Text.UTF8Encoding]::new($false))
+    }
+    $boostRenameFlags = @('configure','initialize','step','terminate','U','Y','B','X','errorStatus','sampleTime','checksum','voltage_updates','main_buck_step','main_full_step') | ForEach-Object { '-Dforward_' + $_ + '=boost_reference_forward_' + $_ }
+    $boostSingleReferenceObject = Join-Path $PSScriptRoot 'boost_single_reference.o'
+    $boostMultiReferenceObject = Join-Path $PSScriptRoot 'boost_multi_reference.o'
+    foreach ($referenceCase in @(@{Object=$boostSingleReferenceObject; Flags=$mainFlags}, @{Object=$boostMultiReferenceObject; Flags=$multirateFlags})) {
+        & gcc -std=c11 -O2 -Wall -Wextra -Werror -ICore/Inc @boostRenameFlags @($referenceCase.Flags) -c (Join-Path $boostReferenceDir 'forward.c') -o $referenceCase.Object
+        if ($LASTEXITCODE -ne 0) { throw 'Independent Boost reference compile failed' }
+    }
     $cases = @(
+        @{Name='forward_boost_equivalence_multirate_test'; Sources=@('tests/forward_boost_equivalence_test.c','Core/Src/forward.c',$boostMultiReferenceObject); Flags=$multirateFlags}
+        @{Name='forward_boost_equivalence_single_test'; Sources=@('tests/forward_boost_equivalence_test.c','Core/Src/forward.c',$boostSingleReferenceObject); Flags=$mainFlags}
         @{Name='forward_boost_limits_raw_test'; Sources=@('tests/forward_boost_limits_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function'))}
         @{Name='forward_boost_limits_float_test'; Sources=@('tests/forward_boost_limits_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($mainFlags + @('-Itests/power_hal','-Wno-unused-function'))}
         @{Name='forward_boost_start1a_raw_test'; Sources=@('tests/forward_boost_start1a_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function'))}

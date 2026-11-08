@@ -1,8 +1,14 @@
 /* Private compile-time step template. Intentionally included more than once.
- * The main image shares the model state and parameters between its Buck and
- * full steps; mode changes require forward_initialize() while stopped. */
+ * The main image shares model state and parameters between its specialized
+ * and full steps; mode changes require forward_initialize() while stopped. */
 #if !defined(FORWARD_STEP_NAME) || !defined(FORWARD_STEP_FAST_BUCK) || !defined(FORWARD_STEP_ATTRIBUTES)
 #error Forward step template requires a name, specialization and attributes.
+#endif
+#ifndef FORWARD_STEP_FAST_BOOST
+#define FORWARD_STEP_FAST_BOOST 0
+#endif
+#if FORWARD_STEP_FAST_BOOST && FORWARD_STEP_FAST_BUCK
+#error Forward step cannot specialize Buck and Boost together.
 #endif
 FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
 {
@@ -11,6 +17,14 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
       return;
    }
 
+#if FORWARD_STEP_FAST_BOOST
+   if (forward_U.mode != 2.f)
+   {
+      forward_errorStatus = "Protected controller requires forward Boost.";
+      memset(&forward_Y, 0, sizeof(forward_Y));
+      return;
+   }
+#endif
 #if FORWARD_STEP_FAST_BUCK
    /* This specialization never transitions to Boost. Reject rather than accidentally
     * run a Buck command if called outside the restricted backend contract. */
@@ -122,6 +136,10 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
     *  Signal Inport : 'forward/mode'
     *  Constant : 'forward/Constant2'
     */
+#if FORWARD_STEP_FAST_BOOST
+   forward_B.EN_F_BUCK1 = false;
+   forward_B.EN_F_BOOST1 = true;
+#else
    forward_B.EN_F_BUCK1 = forward_U.mode == 1.f;
 
    /* Relational Operator : 'forward/EN_F_BOOST1'
@@ -130,6 +148,7 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
     *  Constant : 'forward/Constant3'
     */
    forward_B.EN_F_BOOST1 = forward_U.mode == 2.f;
+#endif
 #else
    forward_B.EN_F_BUCK1 = true;
    forward_B.EN_F_BOOST1 = false;
@@ -147,6 +166,9 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
     */
 #if FORWARD_STEP_FAST_BUCK
    forward_B.Saturation3 = forward_B.Saturation4 / forward_U.V_left;
+#elif FORWARD_STEP_FAST_BOOST
+   /* The backend contract excludes the unused Buck divide, including Vin=0. */
+   forward_B.Saturation3 = forward_B.Saturation1 * 0.200000000000000011f;
 #else
    forward_B.Saturation3 =
       (((float)forward_B.EN_F_BUCK1) *
@@ -328,6 +350,11 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
     */
 #if FORWARD_STEP_FAST_BUCK
    forward_B.Sum3 = forward_B.Saturation - forward_U.IL;
+#elif FORWARD_STEP_FAST_BOOST
+   forward_B.Sum3 =
+      ((forward_B.Saturation *
+        (((float)forward_B.LogicalOperator17) * forward_B.Saturation5)) +
+       (((float)forward_B.LogicalOperator15) * forward_B.Saturation6)) - forward_U.IL;
 #else
    forward_B.Sum3 =
       ((forward_B.Saturation *
@@ -467,4 +494,5 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
 }
 #undef FORWARD_STEP_ATTRIBUTES
 #undef FORWARD_STEP_FAST_BUCK
+#undef FORWARD_STEP_FAST_BOOST
 #undef FORWARD_STEP_NAME

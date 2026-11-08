@@ -5,6 +5,7 @@
 #include "power_build_config.h"
 #if POWER_MAIN_APPLICATION
 #include "reverse_main_buck.h"
+#include "forward_main_boost.h"
 #endif
 #include <math.h>
 #include "power_event_diag.h"

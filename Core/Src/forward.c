@@ -136,10 +136,16 @@ void forward_initialize(float time)
 }
 
 #if POWER_MAIN_APPLICATION
-/* Keep both entry points visible for linked-image CCM verification. */
+/* Keep specialized and compatibility entries visible for CCM verification. */
 #define FORWARD_STEP_ATTRIBUTES __attribute__((noinline, used))
 #define FORWARD_STEP_NAME forward_main_buck_step
 #define FORWARD_STEP_FAST_BUCK 1
+#include "forward_step_impl.inc"
+
+#define FORWARD_STEP_ATTRIBUTES __attribute__((noinline, used))
+#define FORWARD_STEP_NAME forward_main_boost_step
+#define FORWARD_STEP_FAST_BUCK 0
+#define FORWARD_STEP_FAST_BOOST 1
 #include "forward_step_impl.inc"
 
 #define FORWARD_STEP_ATTRIBUTES __attribute__((noinline, used))

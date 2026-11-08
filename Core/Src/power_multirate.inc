@@ -87,7 +87,8 @@ void Power_ControlIRQ(void)
     } else {
         forward_U = (forward_ExternalInputs){.V_left=left,
             .V_right=right,.IL=current,.mode=(float)request.mode};
-        forward_step();
+        if (request.mode == 2U) forward_main_boost_step();
+        else forward_step();
         result.duty = forward_Y.D_cmd;
         result.reference = forward_B.Saturation4;
         result.boost = forward_Y.BOOST_RUN;
