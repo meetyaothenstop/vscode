@@ -55,7 +55,8 @@ static void plant(unsigned mode, double source, double target)
     printf("Multirate real backend mode%u %.0f->%.0fV: output%.3fV peak%.3fV steps%u voltage%u\n",
            mode,source,target,v,peak,start_steps,voltage_steps);
     CHECK(fabs(v-target)<0.65);
-    CHECK(start_steps>25000U && voltage_steps>4500U);
+    CHECK(start_steps>(mode==2U?14000U:25000U) && start_steps<(mode==2U?15001U:30001U));
+    CHECK(voltage_steps>(mode==2U?2800U:4500U) && voltage_steps<(mode==2U?3100U:6100U));
     stop();
 }
 int main(void)

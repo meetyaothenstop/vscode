@@ -220,9 +220,9 @@ static void test_running_frame_cadence_busy_stop_and_fault_restart(void)
     setup();
     service(0U);
 #if POWER_MAIN_ADC_SOFTWARE_ONLY
-    assert(strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? (POWER_OLED_FRAME_RESUME ? (POWER_ADC_FAULT_DETAILS ? "MAIN ADC ADG2 50/10" : "MAIN ADC FRM1 50/10") : "MAIN ADC EVT1 50/10") : "MAIN ADC RAW1 50/10") : "MAIN ADC I50 V10") : "MAIN ADC RBUCK RES1")));
+    assert(strstr(drawn.rows[0], POWER_MULTIRATE_CONTROL ? "MAIN ADC B25/5" : "MAIN ADC RBUCK RES1"));
 #else
-    assert(strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? (POWER_OLED_FRAME_RESUME ? (POWER_ADC_FAULT_DETAILS ? "MAIN HW ADG2 50/10" : "MAIN HW FRM1 50/10") : "MAIN HW EVT1 50/10") : "MAIN HW RAW1 50/10") : "MAIN HW I50 V10") : "MAIN HW GUARD 6A")));
+    assert(strstr(drawn.rows[0], POWER_MULTIRATE_CONTROL ? "MAIN HW B25/5" : "MAIN HW GUARD 6A"));
 #endif
     key(3); key(2); edit(-100); edit(6); key(2); key(3); /* Explicit Buck output. */
     pending = 0U;

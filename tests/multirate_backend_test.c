@@ -112,7 +112,8 @@ int main(void)
     CHECK(power_status.state==POWER_BOOTSTRAP && enabled_outputs==0U);
     period(6.0f,12,0);worker();
     CHECK(power_status.state==POWER_HOLD && enabled_outputs==0U);
-    /* Both Boost directions must go all-off during the20us handover delay. */
+    /* Both Boost directions stay all-off for at least3 PWM periods, then
+     * require a fresh Boost plan; mode2 now computes every6 PWM periods. */
     for(unsigned mode=2;mode<=4;mode+=2) {
         stopped_samples(mode==4?0:12,mode==4?12:0,0); CHECK(request(mode,24));
         for(unsigned n=0;n<33;n++) period(mode==4?0:12,mode==4?12:0,0);
@@ -127,11 +128,20 @@ int main(void)
             period(mode==4?11.99f:12,mode==4?12:11.99f,0);worker();
             CHECK(power_status.state==POWER_CHANGEOVER && enabled_outputs==0U);
         }
-        period(mode==4?11.99f:12,mode==4?12:11.99f,0);worker();
+        if(mode==4U) {
+            /* Keep the original reverse Boost three-period assertion. */
+            period(11.99f,12,0);worker();
+        } else {
+            for(unsigned n=0;n<10 && power_status.state==POWER_CHANGEOVER;n++) {
+                period(12,11.99f,0);worker();
+                CHECK(!power_status.fault);
+                if(power_status.state==POWER_CHANGEOVER)CHECK(enabled_outputs==0U);
+            }
+        }
         CHECK(power_status.state==POWER_RUNNING && enabled_outputs==ALL_OUTPUTS);
         stop();worker();period(12,12,0);worker();
         CHECK(power_status.state==POWER_STOPPED && enabled_outputs==0U);
     }
-    puts("Separated fast/worker IRQs, three-period deadline, protection and stop: PASS");
+    puts("Separated fast/worker IRQs, mode-specific deadline, protection and stop: PASS");
     return 0;
 }

@@ -34,11 +34,23 @@ try {
     $boostRenameFlags = @('configure','initialize','step','terminate','U','Y','B','X','errorStatus','sampleTime','checksum','voltage_updates','main_buck_step','main_full_step') | ForEach-Object { '-Dforward_' + $_ + '=boost_reference_forward_' + $_ }
     $boostSingleReferenceObject = Join-Path $PSScriptRoot 'boost_single_reference.o'
     $boostMultiReferenceObject = Join-Path $PSScriptRoot 'boost_multi_reference.o'
-    foreach ($referenceCase in @(@{Object=$boostSingleReferenceObject; Flags=$mainFlags}, @{Object=$boostMultiReferenceObject; Flags=$multirateFlags})) {
-        & gcc -std=c11 -O2 -Wall -Wextra -Werror -ICore/Inc @boostRenameFlags @($referenceCase.Flags) -c (Join-Path $boostReferenceDir 'forward.c') -o $referenceCase.Object
+    # Resample the independent original algorithm at the new profile, rather
+    # than falsely compare25kHz and50kHz trajectories as the same behavior.
+    $boostMultiReferenceDir = Join-Path $boostReferenceDir '25k'
+    New-Item -ItemType Directory -Force -Path $boostMultiReferenceDir | Out-Null
+    Copy-Item -LiteralPath (Join-Path $boostReferenceDir 'forward.c'),(Join-Path $boostReferenceDir 'forward_step_impl.inc') -Destination $boostMultiReferenceDir -Force
+    $rateHeader = @('#include "boost_control_rates.h"')
+    foreach($rate in @('CURRENT_DT','VOLTAGE_DT','FILTER_B','FILTER_STATE','FILTER_A','PRECHARGE_B','PRECHARGE_STATE','PRECHARGE_A','DELAY_STEPS')) {
+        $rateHeader += '#undef CONTROL_' + $rate
+        $rateHeader += '#define CONTROL_' + $rate + ' BOOST_CONTROL_' + $rate
+    }
+    [IO.File]::WriteAllLines((Join-Path $boostMultiReferenceDir 'control_rates.h'), [string[]]$rateHeader, [Text.UTF8Encoding]::new($false))
+    foreach ($referenceCase in @(@{Object=$boostSingleReferenceObject; Flags=$mainFlags; Dir=$boostReferenceDir}, @{Object=$boostMultiReferenceObject; Flags=$multirateFlags; Dir=$boostMultiReferenceDir})) {
+        & gcc -std=c11 -O2 -Wall -Wextra -Werror -ICore/Inc @boostRenameFlags @($referenceCase.Flags) -c (Join-Path $referenceCase.Dir 'forward.c') -o $referenceCase.Object
         if ($LASTEXITCODE -ne 0) { throw 'Independent Boost reference compile failed' }
     }
     $cases = @(
+        @{Name='forward_boost_rates_test'; Sources=@('tests/forward_boost_rates_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function'))}
         @{Name='forward_boost_equivalence_multirate_test'; Sources=@('tests/forward_boost_equivalence_test.c','Core/Src/forward.c',$boostMultiReferenceObject); Flags=$multirateFlags}
         @{Name='forward_boost_equivalence_single_test'; Sources=@('tests/forward_boost_equivalence_test.c','Core/Src/forward.c',$boostSingleReferenceObject); Flags=$mainFlags}
         @{Name='forward_boost_limits_raw_test'; Sources=@('tests/forward_boost_limits_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function'))}

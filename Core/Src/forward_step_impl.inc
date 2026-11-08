@@ -10,6 +10,11 @@
 #if FORWARD_STEP_FAST_BOOST && FORWARD_STEP_FAST_BUCK
 #error Forward step cannot specialize Buck and Boost together.
 #endif
+#if FORWARD_STEP_FAST_BOOST
+#define FORWARD_RATE(name) BOOST_CONTROL_##name
+#else
+#define FORWARD_RATE(name) CONTROL_##name
+#endif
 FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
 {
    if (forward_errorStatus)
@@ -51,8 +56,8 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
    }
 
    /* Discrete Transfer Function : 'forward/Discrete\nTransfer Fcn1' */
-   forward_B.DiscreteTransferFcn1 = CONTROL_PRECHARGE_B*(forward_U.V_right)+
-                                    CONTROL_PRECHARGE_STATE*
+   forward_B.DiscreteTransferFcn1 = FORWARD_RATE(PRECHARGE_B)*(forward_U.V_right)+
+                                    FORWARD_RATE(PRECHARGE_STATE)*
                                     forward_X.DiscreteTransferFcn1;
 
    /* Comparator : 'forward/PRECHARGE_ACHED' */
@@ -73,7 +78,7 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
    else
    {
       forward_B.DiscreteIntegrator3 = forward_X.DiscreteIntegrator3_i1_x +
-                                      CONTROL_CURRENT_DT*
+                                      FORWARD_RATE(CURRENT_DT)*
                                       forward_X.DiscreteIntegrator3_i2_prevU;
    }
 
@@ -116,7 +121,7 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
    else
    {
       forward_B.DiscreteIntegrator4 = forward_X.DiscreteIntegrator4_i1_x +
-                                      CONTROL_CURRENT_DT*
+                                      FORWARD_RATE(CURRENT_DT)*
                                       forward_X.DiscreteIntegrator4_i2_prevU;
    }
 
@@ -238,7 +243,7 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
     */
    forward_B.Product2 =
       (forward_B.Saturation4 -
-       (CONTROL_FILTER_B*(forward_U.V_right)+CONTROL_FILTER_STATE*
+       (FORWARD_RATE(FILTER_B)*(forward_U.V_right)+FORWARD_RATE(FILTER_STATE)*
         forward_X.DiscreteTransferFcn)) *
    ((float)forward_B.LogicalOperator18);
 
@@ -256,7 +261,7 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
    else
    {
       forward_B.DiscreteIntegrator = forward_X.DiscreteIntegrator_i1_x +
-                                     CONTROL_VOLTAGE_DT*
+                                     FORWARD_RATE(VOLTAGE_DT)*
                                      forward_X.DiscreteIntegrator_i2_prevU;
    }
 
@@ -293,7 +298,7 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
    else
    {
       forward_B.DiscreteIntegrator1 = forward_X.DiscreteIntegrator1_i1_x +
-                                      CONTROL_CURRENT_DT*
+                                      FORWARD_RATE(CURRENT_DT)*
                                       forward_X.DiscreteIntegrator1_i2_prevU;
    }
 
@@ -314,7 +319,7 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
    else
    {
       forward_B.DiscreteIntegrator2 = forward_X.DiscreteIntegrator2_i1_x +
-                                      CONTROL_CURRENT_DT*
+                                      FORWARD_RATE(CURRENT_DT)*
                                       forward_X.DiscreteIntegrator2_i2_prevU;
    }
    if (forward_B.DiscreteIntegrator2 > 1.f)
@@ -407,7 +412,7 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
    {
       float *buffer = &forward_D_double[0];
       buffer[1*forward_D_size_t[0] + 0] = forward_B.LogicalOperator;
-      forward_D_size_t[0] = (forward_D_size_t[0]+1) % CONTROL_DELAY_STEPS;
+      forward_D_size_t[0] = (forward_D_size_t[0]+1) % FORWARD_RATE(DELAY_STEPS);
    }
 #endif
 
@@ -418,7 +423,7 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
     */
    {
       float newX;
-      newX = (forward_U.V_right)+CONTROL_FILTER_A*
+      newX = (forward_U.V_right)+FORWARD_RATE(FILTER_A)*
              forward_X.DiscreteTransferFcn;
       forward_X.DiscreteTransferFcn = newX;
    }
@@ -432,7 +437,7 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
     */
    {
       float newX;
-      newX = (forward_U.V_right)+CONTROL_PRECHARGE_A*
+      newX = (forward_U.V_right)+FORWARD_RATE(PRECHARGE_A)*
              forward_X.DiscreteTransferFcn1;
       forward_X.DiscreteTransferFcn1 = newX;
    }
@@ -496,3 +501,4 @@ FORWARD_STEP_ATTRIBUTES void FORWARD_STEP_NAME(void)
 #undef FORWARD_STEP_FAST_BUCK
 #undef FORWARD_STEP_FAST_BOOST
 #undef FORWARD_STEP_NAME
+#undef FORWARD_RATE

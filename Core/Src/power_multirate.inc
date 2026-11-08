@@ -188,7 +188,7 @@ static void control_slice(uint32_t begin, uint32_t spacing)
     }
     unsigned due = !control_countdown || --control_countdown == 0U;
     /* Commit completed work at the earliest safe PWM boundary. Holding a
-     * completed result until the next50kHz request added needless loop delay. */
+     * completed result until the next control request adds needless loop delay. */
     if (!due && !control_ready) return;
     if (control_pending) {
         if (!control_ready) {
@@ -278,7 +278,7 @@ static void control_slice(uint32_t begin, uint32_t spacing)
         .left=power_status.v_left,.right=power_status.v_right,.current=power_status.il
 #endif
     };
-    control_countdown = 3U;
+    control_countdown = active_mode == 2U ? BOOST_CONTROL_PWM_PERIODS : 3U;
     __DMB();
     control_pending = 1U;
     SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;

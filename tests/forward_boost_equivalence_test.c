@@ -85,6 +85,6 @@ int main(void)
         forward_main_boost_step();
         assert(forward_errorStatus && forward_Y.D_cmd == 0.0f);
     }
-    printf("Protected Boost vs independent307bcdd source: %u complete B/X/Y bitwise steps; precharge/handover/PI/random/reinit and mode rejection PASS\n", samples);
+    printf("Protected Boost vs independent307bcdd algorithm at matching sample rates: %u complete B/X/Y bitwise steps; precharge/handover/PI/random/reinit and mode rejection PASS\n", samples);
     return 0;
 }

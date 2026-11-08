@@ -6,6 +6,24 @@ HEX为`MDK-ARM/bidreaction/bidreaction.hex`。保留正向Buck/Boost及反向Buc
 
 ## 当前版本
 
+2026-11-08：主工程正向Boost采用用户批准的**25kHz电流/5kHz电压计算**，版本`B25/5`。
+PWM、ADC及快速保护仍150kHz；正向Buck、反向Buck/Boost仍50/10kHz，唯一bench保持原150kHz控制。
+mode2每6个PWM请求后台计算，T7窗口由20us变为40us，超期仍关断；其余模式每3个PWM。
+仅专用Boost入口积分步长改40/200us，6238rad/s低通按对应步长重新离散化；连续PI增益及每秒斜坡保持。
+原一步逻辑延迟在此频率下为40us，实际换向仍需至少3个PWM全关断并等到新的Boost plan。
+输入10～42V、启动<1A/残压≤3V等保护门限保持，未因电源表12V反馈放宽欠压10V。
+首页`MAIN ADC B25/5`，正向Boost页`FORWARD BOOST B25/5`；其他模式保留原参数页标识。
+默认仍正向12→18V、反向12→6V。
+
+78组完整主机回归、两速率旧算法同采样率完整状态对比、四模式名义开关模型通过。
+主/bench ARM6.18构建0错误0警告，实际HEX/CCM/快速整数路径/AXF导出核验通过，bench HEX保持。
+主HEX SHA256：`8389EC0754E6815AAB6A173CE2CBE537B3FDFC36CADAC166B8992FD30A9A914F`。
+降频前`8564652`已用`pre-forward-boost-25k-20261108`上传并核对；版本标签`main-forward-boost-25k-20261108`。
+验证与下载后观测见[正向Boost25/5kHz测试](docs/正向Boost25k5k测试-20261108.md)。
+用户自行下载HEX并使用配套AXF。本版尚待实板验证，不宣称T7已消除或IN9.9V物理根因已确定。
+
+## 正向Boost精简OPT1历史
+
 2026-11-08：正向Boost后台精简版OPT1，保持150/50/10kHz、PI及保护门限。
 真实worker仅mode2改用受保护专用入口；保留全部状态更新，移除未使用的Buck除法。
 77组主机回归通过，包括独立旧源两速率共72万步完整B/X/Y逐位比对；主/bench ARM6.18均0错误0警告，bench HEX保持。

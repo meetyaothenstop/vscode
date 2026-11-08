@@ -9,6 +9,7 @@
 #include "forward.h"
 #include "power_build_config.h"
 #include "control_rates.h"
+#include "boost_control_rates.h"
 #ifndef PLECS_HEADER_forward_h_
 #error The wrong header file "forward.h" was included. Please check your
 #error include path to see whether this file name conflicts with the name
