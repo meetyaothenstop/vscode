@@ -2,8 +2,8 @@
 #define CONTROL_RATES_H
 #include "power_build_config.h"
 
-/* PWM/ADC/fast safety stay150kHz. MAIN Buck/reverse/public arithmetic rates;
- * protected forward Boost has its own profile in boost_control_rates.h. */
+/* PWM/ADC/fast safety stay150kHz. MAIN Buck/public arithmetic rates;
+ * protected Boost directions share the profile in boost_control_rates.h. */
 #ifndef POWER_MULTIRATE_CONTROL
 #define POWER_MULTIRATE_CONTROL POWER_MAIN_APPLICATION
 #endif

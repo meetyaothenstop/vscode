@@ -43,14 +43,14 @@ int main(void)
         CHECK(enabled_outputs == 0U && HRTIM1->sCommonRegs.OENR == 0U);
         CHECK(fabsf(power_status.fault_il - 1.02f) < 0.02f);
     }
-    /* A shared-macro change must not silently relax reverse Boost to 1 A. */
+    /* Reverse Boost now shares1A while retaining strict rejection at the limit. */
     for (unsigned sign = 0U; sign < 2U; ++sign) {
         stopped_samples(0.0f, 12.0f, sign ? -0.3f : 0.3f);
-        CHECK(!request(4U, 18.0f) && power_status.fault_detail == 5U);
+        CHECK(request(4U, 18.0f));
     }
     stopped_samples(0.0f, 12.0f, -0.2f);
     CHECK(request(4U, 18.0f));
-    period(0.0f, 12.0f, -0.3f);
+    period(0.0f, 12.0f, -1.02f);
     CHECK(power_status.fault == POWER_FAULT_START && power_status.fault_detail == 8U);
     /* Output residual, sampled overcurrent, and wrong-direction protection remain. */
     stopped_samples(12.0f, 3.05f, 0.0f);
@@ -69,6 +69,6 @@ int main(void)
     for (unsigned n = 0U; n < 33U; ++n) period(12.0f, 0.0f, 0.0f);
     period(12.0f, 0.0f, -1.02f);
     CHECK((power_status.fault & POWER_FAULT_REVERSE) != 0U && enabled_outputs == 0U);
-    puts("Forward Boost startup below1A through request/bootstrap/arming; reverse0.25A and other trips retained: PASS");
+    puts("Both Boost directions use startup below1A; sampled current and direction trips retained: PASS");
     return 0;
 }

@@ -5,6 +5,7 @@
 #include "power_build_config.h"
 #if POWER_MAIN_APPLICATION
 #include "reverse_main_buck.h"
+#include "reverse_main_boost.h"
 #include "forward_main_boost.h"
 #endif
 #include <math.h>
@@ -59,7 +60,7 @@ static inline unsigned main_uses_late_input(unsigned mode)
 { return mode == 1U || mode == 2U; }
 /* Electrical policy only: Boost voltage relation, ADC phase, sequence and
  * timing deadlines remain selected separately by the actual mode. */
-#define MAIN_SHARED_ELECTRICAL_LIMITS(mode) ((mode) == 1U || (mode) == 2U || (mode) == 3U)
+#define MAIN_SHARED_ELECTRICAL_LIMITS(mode) ((mode) >= 1U && (mode) <= 4U)
 #define MODE_LIMIT(mode, name) (MAIN_SHARED_ELECTRICAL_LIMITS(mode) ? \
     POWER_MAIN_BUCK_##name : POWER_##name)
 /* Fixed for an accepted request. Publish with active_mode/target before

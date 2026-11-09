@@ -49,7 +49,36 @@ try {
         & gcc -std=c11 -O2 -Wall -Wextra -Werror -ICore/Inc @boostRenameFlags @($referenceCase.Flags) -c (Join-Path $referenceCase.Dir 'forward.c') -o $referenceCase.Object
         if ($LASTEXITCODE -ne 0) { throw 'Independent Boost reference compile failed' }
     }
+    # Reverse reference is independent source, pinned before this change.
+    $reverseBoostBaseline = 'pre-reverse-boost-align-20261109'
+    $reverseBoostCommit = (& git rev-parse ($reverseBoostBaseline + '^{}')).Trim()
+    if ($LASTEXITCODE -ne 0 -or $reverseBoostCommit -ne '70e5a84bc5985e07807d93a4f12037151043b89b') {
+        throw 'Fetch the published pre-reverse-boost-align-20261109 tag before reverse Boost equivalence tests'
+    }
+    $reverseBoostReferenceDir = Join-Path $projectRoot '.superpowers/reverse-boost-align/reference'
+    New-Item -ItemType Directory -Force -Path $reverseBoostReferenceDir | Out-Null
+    foreach ($source in @('reverse.c','reverse_step_impl.inc')) {
+        $baselineSource = @(& git show ($reverseBoostBaseline + ':Core/Src/' + $source))
+        if ($LASTEXITCODE -ne 0) { throw "Cannot read reverse baseline source: $source" }
+        [IO.File]::WriteAllLines((Join-Path $reverseBoostReferenceDir $source), [string[]]$baselineSource, [Text.UTF8Encoding]::new($false))
+    }
+    $reverseBoostMultiDir = Join-Path $reverseBoostReferenceDir '25k'
+    New-Item -ItemType Directory -Force -Path $reverseBoostMultiDir | Out-Null
+    Copy-Item -LiteralPath (Join-Path $reverseBoostReferenceDir 'reverse.c'),(Join-Path $reverseBoostReferenceDir 'reverse_step_impl.inc') -Destination $reverseBoostMultiDir -Force
+    [IO.File]::WriteAllLines((Join-Path $reverseBoostMultiDir 'control_rates.h'), [string[]]$rateHeader, [Text.UTF8Encoding]::new($false))
+    $reverseBoostRenameFlags = @('configure','initialize','step','hold_step','prepare_resume','terminate','U','Y','B','X','errorStatus','sampleTime','checksum','voltage_updates','main_buck_step','main_buck_hold_step','main_full_step') | ForEach-Object { '-Dreverse_' + $_ + '=boost_reference_reverse_' + $_ }
+    $reverseBoostSingleObject = Join-Path $PSScriptRoot 'reverse_boost_single_reference.o'
+    $reverseBoostMultiObject = Join-Path $PSScriptRoot 'reverse_boost_multi_reference.o'
+    foreach ($referenceCase in @(@{Object=$reverseBoostSingleObject; Flags=$mainFlags; Dir=$reverseBoostReferenceDir}, @{Object=$reverseBoostMultiObject; Flags=$multirateFlags; Dir=$reverseBoostMultiDir})) {
+        & gcc -std=c11 -O2 -Wall -Wextra -Werror -ICore/Inc @reverseBoostRenameFlags @($referenceCase.Flags) -c (Join-Path $referenceCase.Dir 'reverse.c') -o $referenceCase.Object
+        if ($LASTEXITCODE -ne 0) { throw 'Independent reverse Boost reference compile failed' }
+    }
     $cases = @(
+        @{Name='reverse_boost_equivalence_multirate_test'; Sources=@('tests/reverse_boost_equivalence_test.c','Core/Src/reverse.c',$reverseBoostMultiObject); Flags=$multirateFlags}
+        @{Name='reverse_boost_equivalence_single_test'; Sources=@('tests/reverse_boost_equivalence_test.c','Core/Src/reverse.c',$reverseBoostSingleObject); Flags=$mainFlags}
+        @{Name='reverse_boost_limits_raw_test'; Sources=@('tests/reverse_boost_limits_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function'))}
+        @{Name='reverse_boost_limits_float_test'; Sources=@('tests/reverse_boost_limits_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($mainFlags + @('-Itests/power_hal','-Wno-unused-function'))}
+        @{Name='reverse_boost_limits_float_multirate_test'; Sources=@('tests/reverse_boost_limits_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-DPOWER_RAW_FAST_IRQ=0','-Itests/power_hal','-Wno-unused-function'))}
         @{Name='forward_input_phase_raw_test'; Sources=@('tests/forward_input_phase_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-Itests/power_hal','-Wno-unused-function'))}
         @{Name='forward_input_phase_float_test'; Sources=@('tests/forward_input_phase_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($mainFlags + @('-Itests/power_hal','-Wno-unused-function'))}
         @{Name='forward_input_phase_float_multirate_test'; Sources=@('tests/forward_input_phase_test.c','Core/Src/power_control.c','Core/Src/forward.c','Core/Src/reverse.c','Core/Src/pwm_plan.c','Core/Src/adc_measure.c'); Flags=($multirateFlags + @('-DPOWER_RAW_FAST_IRQ=0','-Itests/power_hal','-Wno-unused-function'))}

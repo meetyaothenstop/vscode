@@ -87,3 +87,4 @@ __pycache__/
 /tests/multirate_baseline.log
 /.superpowers/boost-t7-opt/
 /.superpowers/forward-input-adc2/
+/.superpowers/reverse-boost-align/

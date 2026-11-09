@@ -74,8 +74,9 @@ void Power_ControlIRQ(void)
         if (request.resume) reverse_prepare_resume(left);
         if (request.hold && !request.resume) {
             if (request.mode == 3U) reverse_main_buck_hold_step();
-            else reverse_hold_step();
+            else reverse_main_boost_hold_step();
         }
+        else if (request.mode == 4U) reverse_main_boost_step();
         else reverse_step();
         result.duty = reverse_Y.D_cm_R;
         result.reference = reverse_B.Saturation4;
@@ -278,7 +279,7 @@ static void control_slice(uint32_t begin, uint32_t spacing)
         .left=power_status.v_left,.right=power_status.v_right,.current=power_status.il
 #endif
     };
-    control_countdown = active_mode == 2U ? BOOST_CONTROL_PWM_PERIODS : 3U;
+    control_countdown = (active_mode == 2U || active_mode == 4U) ? BOOST_CONTROL_PWM_PERIODS : 3U;
     __DMB();
     control_pending = 1U;
     SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;

@@ -12,6 +12,7 @@
 #include "control_rates.h"
 #if POWER_MAIN_APPLICATION
 #include "reverse_main_buck.h"
+#include "reverse_main_boost.h"
 #endif
 #ifndef PLECS_HEADER_reverse_h_
 #error The wrong header file "reverse.h" was included. Please check your
@@ -147,6 +148,11 @@ void reverse_initialize(float time)
 #define REVERSE_STEP_FAST_BUCK 1
 #include "reverse_step_impl.inc"
 #define REVERSE_STEP_ATTRIBUTES __attribute__((noinline, used))
+#define REVERSE_STEP_NAME reverse_main_boost_step
+#define REVERSE_STEP_FAST_BUCK 0
+#define REVERSE_STEP_BOOST_RATES 1
+#include "reverse_step_impl.inc"
+#define REVERSE_STEP_ATTRIBUTES __attribute__((noinline, used))
 #define REVERSE_STEP_NAME reverse_main_full_step
 #define REVERSE_STEP_FAST_BUCK 0
 #include "reverse_step_impl.inc"
@@ -172,6 +178,17 @@ void reverse_main_buck_hold_step(void)
    reverse_X.DiscreteIntegrator1_i1_x = 0.0f;
    reverse_X.DiscreteIntegrator1_i2_prevU = 0.0f;
    reverse_main_buck_step();
+   reverse_X.Integrator_x = voltage_integral;
+   reverse_X.DiscreteIntegrator1_i1_x = 0.0f;
+   reverse_X.DiscreteIntegrator1_i2_prevU = 0.0f;
+}
+
+void reverse_main_boost_hold_step(void)
+{
+   float voltage_integral = reverse_X.Integrator_x;
+   reverse_X.DiscreteIntegrator1_i1_x = 0.0f;
+   reverse_X.DiscreteIntegrator1_i2_prevU = 0.0f;
+   reverse_main_boost_step();
    reverse_X.Integrator_x = voltage_integral;
    reverse_X.DiscreteIntegrator1_i1_x = 0.0f;
    reverse_X.DiscreteIntegrator1_i2_prevU = 0.0f;

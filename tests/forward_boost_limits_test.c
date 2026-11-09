@@ -14,9 +14,9 @@ static void run_forward_boost(float target)
 static void main_uv9_boundaries(void)
 {
     const unsigned phases[]={0U,1U,30U,31U,32U,33U};
-    for(unsigned mode=1;mode<=3;mode++) {
-        const unsigned reverse=mode==3U;
-        const float target=mode==2U?18.0f:6.0f;
+    for(unsigned mode=1;mode<=4;mode++) {
+        const unsigned reverse=mode>=3U;
+        const float target=(mode==2U || mode==4U)?18.0f:6.0f;
         const float gain=reverse?ADC_RIGHT_VOLTS_PER_COUNT:ADC_LEFT_VOLTS_PER_COUNT;
         const unsigned below=(unsigned)floorf(9.0f/gain);
         CHECK(below*gain<9.0f && (below+1U)*gain>=9.0f);
@@ -128,20 +128,20 @@ int main(void)
         period(12.0f, (below + 1U) * ADC_RIGHT_VOLTS_PER_COUNT, 0.0f);
         CHECK(power_status.fault == POWER_FAULT_OUTPUT && power_status.fault_raw_vl == below + 1U);
     }
-    /* Reverse Boost retains its independent original input/residual/OVP policy. */
+    /* Reverse Boost shares the same policy on the opposite physical buses. */
     stopped_samples(0.0f, 6.1f, 0.0f);
-    CHECK(request(4U, 18.0f));
+    CHECK(!request(4U, 18.0f) && power_status.fault_detail == 4U);
     stopped_samples(0.0f, 41.0f, 0.0f);
-    CHECK(!request(4U, 36.0f) && power_status.fault_detail == 4U);
+    CHECK(!request(4U, 36.0f) && power_status.fault_detail == 7U);
     stopped_samples(0.3f, 12.0f, 0.0f);
-    CHECK(!request(4U, 18.0f) && power_status.fault_detail == 6U);
+    CHECK(request(4U, 18.0f));
     stopped_samples(0.0f, 12.0f, 0.0f);
     CHECK(request(4U, 18.0f));
     for (unsigned n = 0U; n < 33U; ++n) period(0.0f, 12.0f, 0.0f);
-    period(19.7f, 12.0f, 0.0f);
+    period(26.9f, 12.0f, 0.0f);
     CHECK(power_status.fault == 0U);
-    period(19.9f, 12.0f, 0.0f);
+    period(27.1f, 12.0f, 0.0f);
     CHECK(power_status.fault == POWER_FAULT_OUTPUT);
-    puts("Forward Boost shares Buck electrical limits; cold3V, input9..42V, OVP1.5x/40V and reverse isolation: PASS");
+    puts("All MAIN modes share cold3V, input9..42V and OVP1.5x/40V on their physical buses: PASS");
     return 0;
 }

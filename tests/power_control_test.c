@@ -1215,7 +1215,7 @@ static void main_buck_limits_and_reachability(void)
     }
     for (unsigned mode = 2U; mode <= 4U; mode += 2U) {
         stopped_samples(mode == 2U ? 41.0f : 0.0f, mode == 2U ? 0.0f : 41.0f, 0.0f);
-        CHECK(!request(mode, 36.0f) && power_status.fault_detail == (mode == 2U ? 7U : 4U));
+        CHECK(!request(mode, 36.0f) && power_status.fault_detail == 7U);
     }
     for (unsigned mode = 1U; mode <= 3U; mode += 2U) {
         const float gain = mode == 1U ? ADC_LEFT_VOLTS_PER_COUNT : ADC_RIGHT_VOLTS_PER_COUNT;
@@ -1528,10 +1528,10 @@ static void main_mode_protection(void)
             period(mode >= 3U ? residual : source, mode >= 3U ? source : residual, mode >= 3U ? -current : current);
         CHECK(power_status.state == POWER_RUNNING);
         stopped_samples(mode >= 3U ? 0.0f : source, mode >= 3U ? source : 0.0f, mode >= 3U ? -0.5f : 0.5f);
-        power_status.il = mode <= 2U ? 1.0f : (mode == 3U ? -1.0f : -0.5f);
+        power_status.il = mode <= 2U ? 1.0f : -1.0f;
         CHECK(!request(mode, target) && power_status.fault_detail == 5U);
         start_running(mode, source, target);
-        const float threshold = (mode == 1U || mode == 3U) ? 18.0f : (mode == 2U ? 40.0f : 39.6f);
+        const float threshold = (mode == 1U || mode == 3U) ? 18.0f : 40.0f;
         const float gain = mode >= 3U ? ADC_LEFT_VOLTS_PER_COUNT : ADC_RIGHT_VOLTS_PER_COUNT;
         const float below = floorf(threshold / gain) * gain;
         period(mode >= 3U ? below : source, mode >= 3U ? source : below, 0.0f);
@@ -1571,7 +1571,7 @@ static void main_mode_protection(void)
     expect_fault(POWER_FAULT_CURRENT); CHECK(power_status.fault_raw_il == 4009U);
     CHECK(request(1U, 0.0f)); period(24.0f, 0.0f, 0.0f);
     CHECK(power_status.fault_raw_il == 4009U);
-    puts("Main mode protection: Buck/forward Boost1.5x with6..40V OVP, reverse Boost1.1x, cold limits and6A reference vs7.5A sampled trip: PASS");
+    puts("Main four-mode protection:1.5x with6..40V OVP, shared cold limits and6A reference vs7.5A sampled trip: PASS");
 }
 
 static void main_adc_mode_selection(void)

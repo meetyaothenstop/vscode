@@ -2,8 +2,8 @@
 #define BOOST_CONTROL_RATES_H
 #include "control_rates.h"
 
-/* Only the protected MAIN mode2 worker runs this profile. Public controller
- * entry, Buck and reverse retain CONTROL_* rates. Fast safety stays150kHz. */
+/* Protected MAIN mode2/mode4 workers share this profile. Public controller
+ * entries and both Buck modes retain CONTROL_* rates. Fast safety stays150kHz. */
 #define BOOST_CONTROL_PWM_PERIODS 6U
 #if POWER_MULTIRATE_CONTROL
 #define BOOST_CONTROL_CURRENT_DT 0.000040f

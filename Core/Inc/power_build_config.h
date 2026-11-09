@@ -141,7 +141,7 @@
 #endif
 
 /* Main nominal menu range12..40V; fresh input protection has endpoint margin.
- * MAIN Buck and forward Boost share the electrical limits below. */
+ * All four MAIN modes share the electrical limits below. */
 #define POWER_MAIN_INPUT_SETTING_MIN           12U
 #define POWER_MAIN_INPUT_SETTING_MAX           40U
 #define POWER_MAIN_OUTPUT_SETTING_MIN           0U
@@ -149,7 +149,7 @@
 #define POWER_MAIN_BUCK_INPUT_MIN_VOLTS         9.0f
 #define POWER_MAIN_BUCK_INPUT_MAX_VOLTS        42.0f
 #define POWER_MAIN_BUCK_MAX_TARGET_VOLTS       36.0f
-/* Shared by MAIN Buck directions and forward Boost, per user request. */
+/* Shared by all four MAIN modes, per user request. */
 #define POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_RATIO 1.5f
 #define POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_MIN_VOLTS 6.0f
 #define POWER_MAIN_BUCK_OUTPUT_OVERVOLTAGE_MAX_VOLTS 40.0f

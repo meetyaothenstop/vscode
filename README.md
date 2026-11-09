@@ -6,9 +6,24 @@ HEX为`MDK-ARM/bidreaction/bidreaction.hex`。保留正向Buck/Boost及反向Buc
 
 ## 当前版本
 
+2026-11-09：MAIN反向Boost的输入/启动/过压检查及控制频率已对齐正向Boost，
+版本标签`main-reverse-boost-align-20261109`。
+四模式共享输入9～42V、启动严格|IL|<1A、输出残压≤3V、
+OVP为min(max(最终目标×1.5,6V),40V)；两个Boost均25kHz电流/5kHz电压计算，
+两个Buck50/10kHz，PWM/ADC/快速保护150kHz。
+反向保持右ADC1输入、左ADC1输出及负IL，连续PI和原预充/HOLD恢复逻辑保持。
+86组完整主机回归、独立旧源72万步状态对比、主/bench ARM6.18重建0错误0警告和实际映像核验通过；bench HEX保持。
+首页`MAIN ADC B25/5 R1`，反向Boost页`REVERSE BOOST R25V9`。
+主HEX SHA256：`93990C58277572D5109B2E6035DA3866BF8B1AE747F5380C69A9436F31C90CE6`。
+保留用户默认正向18→3V、反向12→6V；反向Boost需在菜单选择reverse并设置有效升压目标。
+下载由用户操作，实板时序、电气表现及硬件OCP接线未验证。
+范围、指纹和复测说明见[反向Boost对齐测试](docs/反向Boost对齐测试-20261109.md)。
+
 用户历次报错的触发条件、已知结论及完整S/T编号见[故障报错对照清单](docs/故障报错对照清单-20261109.md)。
 
-最新接续信息见[2026-11-08对话摘要](docs/对话接续摘要-2026-11-08.md)：用户反馈12→24V正常，12→36V/100Ω在0.7A电源限流时报欠压，调到0.9A后报128 S7，尚未定位。工作区后续默认已改18→36V且本地HEX/AXF已变化，未纳入下述最后已验证固件；请保留用户修改并核对实际板上版本。
+此前接续信息见[2026-11-08对话摘要](docs/对话接续摘要-2026-11-08.md)：用户反馈正向12→24V正常，12→36V/100Ω在0.7A电源限流时报欠压，调到0.9A后报128 S7，尚未定位。本轮未继续排查这些实板故障，板上版本仍需单独核对。
+
+## 主工程欠压9V历史（2026-11-08）
 
 2026-11-08：按用户要求，将MAIN共用输入欠压门限**10V降至9V**，输入保护窗口为9～42V。
 适用于正向Buck、正向Boost和反向Buck；请求检查与后续各阶段保护共用
@@ -99,8 +114,8 @@ mode2每6个PWM请求后台计算，T7窗口由20us变为40us，超期仍关断�
 主工程修改`#if POWER_MAIN_APPLICATION`下面相邻的四个宏：
 
 ```c
-#define POWER_FORWARD_DEFAULT_INPUT_VOLTS  12U
-#define POWER_FORWARD_DEFAULT_OUTPUT_VOLTS 24U
+#define POWER_FORWARD_DEFAULT_INPUT_VOLTS  18U
+#define POWER_FORWARD_DEFAULT_OUTPUT_VOLTS  3U
 #define POWER_REVERSE_DEFAULT_INPUT_VOLTS  12U
 #define POWER_REVERSE_DEFAULT_OUTPUT_VOLTS  6U
 ```
@@ -108,7 +123,7 @@ mode2每6个PWM请求后台计算，T7窗口由20us变为40us，超期仍关断�
 菜单初始化直接引用这些宏；调试邮箱`power_target_volts`仍默认取正向输出值。
 输入设定用于菜单选择Buck/Boost，实际输入仍由ADC测量；这里的默认值不是软启动斜坡起点。
 先前集中配置时的等价性验证见[默认电压配置整理](docs/默认电压配置整理-20261107.md)；
-当时的正向默认24→12V随后改为12→18V，并用`3ad070f`保存；本次保留工作区已设置的12→24V默认。
+当时的正向默认24→12V随后多次由用户调整；2026-11-09修改前以`70e5a84`保存当前18→3V默认。
 
 用户本次反馈反向Buck已能正常从36V降至6V；本次未补充负载、运行时长或同步波形。
 该反馈不扩展为全范围、实板最坏时序或硬件OCP验证；历史故障1/4/16的物理根因和调试连接状态未重新核验。

@@ -3,12 +3,30 @@
 #if !defined(REVERSE_STEP_NAME) || !defined(REVERSE_STEP_FAST_BUCK) || !defined(REVERSE_STEP_ATTRIBUTES)
 #error Reverse template requires a name, specialization and attributes.
 #endif
+#ifndef REVERSE_STEP_BOOST_RATES
+#define REVERSE_STEP_BOOST_RATES 0
+#endif
+#if REVERSE_STEP_BOOST_RATES && REVERSE_STEP_FAST_BUCK
+#error Reverse step cannot select Buck and Boost profiles together.
+#endif
+#if REVERSE_STEP_BOOST_RATES
+#define REVERSE_RATE(name) BOOST_CONTROL_##name
+#else
+#define REVERSE_RATE(name) CONTROL_##name
+#endif
 REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
 {
    if (reverse_errorStatus)
    {
       return;
    }
+#if REVERSE_STEP_BOOST_RATES
+   if (reverse_U.mode != 4.0f) {
+      reverse_errorStatus = "Protected controller requires reverse Boost.";
+      memset(&reverse_Y, 0, sizeof(reverse_Y));
+      return;
+   }
+#endif
 #if REVERSE_STEP_FAST_BUCK
    /* MAIN backend contract: initialized mode3, finite fresh ADC inputs and
     * right-input protection checked before this call. Public reverse_step()
@@ -61,7 +79,7 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
    else
    {
       reverse_B.DiscreteIntegrator3 = reverse_X.DiscreteIntegrator3_i1_x +
-                                      CONTROL_CURRENT_DT*
+                                      REVERSE_RATE(CURRENT_DT)*
                                       reverse_X.DiscreteIntegrator3_i2_prevU;
    }
 
@@ -82,8 +100,8 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
    }
 
    /* Discrete Transfer Function : 'reverse/Discrete\nTransfer Fcn2' */
-   reverse_B.DiscreteTransferFcn2 = CONTROL_PRECHARGE_B*(reverse_U.V_left)+
-                                    CONTROL_PRECHARGE_STATE*
+   reverse_B.DiscreteTransferFcn2 = REVERSE_RATE(PRECHARGE_B)*(reverse_U.V_left)+
+                                    REVERSE_RATE(PRECHARGE_STATE)*
                                     reverse_X.DiscreteTransferFcn2;
 
    /* Comparator : 'reverse/PRECHARGE_ACHED' */
@@ -103,7 +121,7 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
    else
    {
       reverse_B.DiscreteIntegrator4 = reverse_X.DiscreteIntegrator4_i1_x +
-                                      CONTROL_CURRENT_DT*
+                                      REVERSE_RATE(CURRENT_DT)*
                                       reverse_X.DiscreteIntegrator4_i2_prevU;
    }
 
@@ -219,8 +237,8 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
     */
    reverse_B.Product3 = ((float)reverse_B.LogicalOperator18) *
                         (reverse_B.Saturation4 -
-                         (CONTROL_FILTER_B*(reverse_U.V_left)+
-                          CONTROL_FILTER_STATE*
+                         (REVERSE_RATE(FILTER_B)*(reverse_U.V_left)+
+                          REVERSE_RATE(FILTER_STATE)*
                           reverse_X.DiscreteTransferFcn));
 
    /* Saturation : 'reverse/Saturation'
@@ -258,7 +276,7 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
    else
    {
       reverse_B.DiscreteIntegrator1 = reverse_X.DiscreteIntegrator1_i1_x +
-                                      CONTROL_CURRENT_DT*
+                                      REVERSE_RATE(CURRENT_DT)*
                                       reverse_X.DiscreteIntegrator1_i2_prevU;
    }
 
@@ -279,7 +297,7 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
    else
    {
       reverse_B.DiscreteIntegrator5 = reverse_X.DiscreteIntegrator5_i1_x +
-                                      CONTROL_CURRENT_DT*
+                                      REVERSE_RATE(CURRENT_DT)*
                                       reverse_X.DiscreteIntegrator5_i2_prevU;
    }
    if (reverse_B.DiscreteIntegrator5 > 1.f)
@@ -379,7 +397,7 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
    {
       float *buffer = &reverse_D_double[0];
       buffer[1*reverse_D_size_t[0] + 0] = (reverse_B.LogicalOperator);
-      reverse_D_size_t[0] = (reverse_D_size_t[0]+1) % CONTROL_DELAY_STEPS;
+      reverse_D_size_t[0] = (reverse_D_size_t[0]+1) % REVERSE_RATE(DELAY_STEPS);
    }
 
 #endif
@@ -390,7 +408,7 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
     */
    {
       float newX;
-      newX = (reverse_U.V_left)+CONTROL_FILTER_A*
+      newX = (reverse_U.V_left)+REVERSE_RATE(FILTER_A)*
              reverse_X.DiscreteTransferFcn;
       reverse_X.DiscreteTransferFcn = newX;
    }
@@ -404,7 +422,7 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
     */
    {
       float newX;
-      newX = (reverse_U.V_left)+CONTROL_PRECHARGE_A*
+      newX = (reverse_U.V_left)+REVERSE_RATE(PRECHARGE_A)*
              reverse_X.DiscreteTransferFcn2;
       reverse_X.DiscreteTransferFcn2 = newX;
    }
@@ -451,10 +469,12 @@ REVERSE_STEP_ATTRIBUTES void REVERSE_STEP_NAME(void)
       0.0f : 10.0f*reverse_B.Product3;
 
    /* Update continuous states */
-   reverse_X.Integrator_x += CONTROL_VOLTAGE_DT*reverse_deriv[0];   }
+   reverse_X.Integrator_x += REVERSE_RATE(VOLTAGE_DT)*reverse_deriv[0];   }
 
 }
 
 #undef REVERSE_STEP_NAME
 #undef REVERSE_STEP_FAST_BUCK
 #undef REVERSE_STEP_ATTRIBUTES
+#undef REVERSE_STEP_BOOST_RATES
+#undef REVERSE_RATE
