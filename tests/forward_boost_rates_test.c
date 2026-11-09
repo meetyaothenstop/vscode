@@ -121,7 +121,7 @@ int main(void)
         worker(); CHECK(enabled_outputs==0);
         start_mode(mode);worker();
         for(unsigned n=1;n<phase;n++)period(mode==2?12:0,mode==2?0:12,0);
-        period(mode==2?8.9f:0,mode==2?0:8.9f,0);
+        period(mode==2?8.9f:0,mode==2?0:6.9f,0);
         CHECK(power_status.fault==POWER_FAULT_INPUT && enabled_outputs==0);
         worker(); CHECK(enabled_outputs==0);
     }

@@ -63,6 +63,8 @@ static inline unsigned main_uses_late_input(unsigned mode)
 #define MAIN_SHARED_ELECTRICAL_LIMITS(mode) ((mode) >= 1U && (mode) <= 4U)
 #define MODE_LIMIT(mode, name) (MAIN_SHARED_ELECTRICAL_LIMITS(mode) ? \
     POWER_MAIN_BUCK_##name : POWER_##name)
+#define MODE_INPUT_MIN_VOLTS(mode) ((mode) == 4U ? \
+    POWER_MAIN_REVERSE_BOOST_INPUT_MIN_VOLTS : MODE_LIMIT(mode, INPUT_MIN_VOLTS))
 /* Fixed for an accepted request. Publish with active_mode/target before
  * start_pending, rather than choosing Buck/Boost constants in every IRQ. */
 static struct {
@@ -74,6 +76,7 @@ static struct {
 #define IRQ_LIMIT(name) active_limits.name
 #else
 #define MODE_LIMIT(mode, name) POWER_##name
+#define MODE_INPUT_MIN_VOLTS(mode) POWER_INPUT_MIN_VOLTS
 #define IRQ_LIMIT(name) POWER_##name
 #endif
 
@@ -594,7 +597,7 @@ int Power_RequestStart(unsigned mode, float target_volts)
 #endif
             ) rejection = 2U;
     else if (!(target_volts >= 1.0f && target_volts <= MODE_LIMIT(mode, MAX_TARGET_VOLTS))) rejection = 3U;
-    else if (!(vin >= MODE_LIMIT(mode, INPUT_MIN_VOLTS) && vin <= MODE_LIMIT(mode, INPUT_MAX_VOLTS))) rejection = 4U;
+    else if (!(vin >= MODE_INPUT_MIN_VOLTS(mode) && vin <= MODE_LIMIT(mode, INPUT_MAX_VOLTS))) rejection = 4U;
 #if POWER_RAW_FAST_IRQ
     else if (!(fabsf(start_current) < start_current_limit)) rejection = 5U;
 #else
@@ -617,7 +620,7 @@ int Power_RequestStart(unsigned mode, float target_volts)
     active_mode = mode;
     active_target = target_volts;
 #if POWER_MAIN_APPLICATION
-    active_limits.INPUT_MIN_VOLTS = MODE_LIMIT(mode, INPUT_MIN_VOLTS);
+    active_limits.INPUT_MIN_VOLTS = MODE_INPUT_MIN_VOLTS(mode);
     active_limits.INPUT_MAX_VOLTS = MODE_LIMIT(mode, INPUT_MAX_VOLTS);
     active_limits.START_CURRENT_LIMIT_AMPS = start_current_limit;
     active_limits.START_OUTPUT_MAX_VOLTS = start_output_max;

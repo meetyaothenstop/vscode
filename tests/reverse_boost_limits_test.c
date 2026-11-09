@@ -12,6 +12,17 @@ static void run_boost(float target)
 int main(void)
 {
     cold_boot();
+    /* Reported8.99V must qualify mode4 at request and every fresh phase. */
+    const unsigned accept_phases[]={0,1,30,31,32,33};
+    const float accepted_input[]={7.1f,8.99f};
+    for(unsigned v=0;v<2;v++) {
+        stopped_samples(0,accepted_input[v],0);CHECK(request(4,18));
+        for(unsigned p=0;p<6;p++) {
+            stopped_samples(0,12,0);CHECK(request(4,18));
+            for(unsigned n=0;n<accept_phases[p];n++)period(0,12,0);
+            period(0,accepted_input[v],0);CHECK(!power_status.fault);
+        }
+    }
     for(unsigned sign=0;sign<2;sign++) {
         float current=sign?-0.98f:0.98f;
         stopped_samples(2.99f,12,current); CHECK(request(4,18));
@@ -25,7 +36,7 @@ int main(void)
     for(unsigned p=0;p<5;p++)for(unsigned kind=0;kind<5;kind++) {
         stopped_samples(0,12,0);CHECK(request(4,18));
         for(unsigned n=0;n<phases[p];n++)period(0,12,0);
-        period(kind==4?3.05f:0,kind==0?8.9f:(kind==1?42.1f:12),
+        period(kind==4?3.05f:0,kind==0?6.9f:(kind==1?42.1f:12),
                kind==2?-1.02f:(kind==3?1.02f:0));
         CHECK(power_status.fault==(kind<2?POWER_FAULT_INPUT:POWER_FAULT_START));
         if(kind>=2)CHECK(power_status.fault_detail==(kind==4?9U:8U));
@@ -54,6 +65,6 @@ int main(void)
         before_call();Power_ControlIRQ();after_call();
     }
     period(0,12,1.02f);CHECK(power_status.fault==POWER_FAULT_REVERSE && enabled_outputs==0);
-    puts("Reverse Boost shared9..42V/1A/3V/cappedOVP; physical buses, fresh cold checks and direction/current: PASS");
+    puts("Reverse Boost7..42V/1A/3V/cappedOVP; reported8.99V accepted, fresh checks and direction/current: PASS");
     return 0;
 }

@@ -6,6 +6,18 @@ HEX为`MDK-ARM/bidreaction/bidreaction.hex`。保留正向Buck/Boost及反向Buc
 
 ## 当前版本
 
+2026-11-09后续：用户在反向12→18V、100Ω、电源限流0.9A时报2/IN8.99V，
+要求将欠压降至7V试验。本版仅将MAIN反向Boost输入窗改为**7～42V**，
+其他三模式仍9～42V；请求与后续各阶段共用该门限，其他保护、ADC、PI及控制频率保持。
+保留用户默认正向18→3V、反向**12→18V**；首页`MAIN ADC B25/5 R7`，
+反向Boost页`REVERSE BOOST R25V7`。版本标签`main-reverse-boost-uv7-20261109`。
+86组完整回归及独立只读审查通过；主/bench ARM6.18构建均0错误0警告，实际映像核验通过，bench HEX保持。
+主HEX SHA256：`54B96039A64A9CFA48E7ABD7A8A880C63BCA93AA66AE67188BF7F5E18FC23479`。
+7V是用户要求的门限试验，尚未确定8.99V属于真实压降还是采样干扰；实板行为仍待用户下载验证。
+详情见[反向Boost欠压7V测试](docs/反向Boost欠压7V测试-20261109.md)。
+
+## 反向Boost门限与频率对齐历史（同日早先）
+
 2026-11-09：MAIN反向Boost的输入/启动/过压检查及控制频率已对齐正向Boost，
 版本标签`main-reverse-boost-align-20261109`。
 四模式共享输入9～42V、启动严格|IL|<1A、输出残压≤3V、
@@ -117,7 +129,7 @@ mode2每6个PWM请求后台计算，T7窗口由20us变为40us，超期仍关断�
 #define POWER_FORWARD_DEFAULT_INPUT_VOLTS  18U
 #define POWER_FORWARD_DEFAULT_OUTPUT_VOLTS  3U
 #define POWER_REVERSE_DEFAULT_INPUT_VOLTS  12U
-#define POWER_REVERSE_DEFAULT_OUTPUT_VOLTS  6U
+#define POWER_REVERSE_DEFAULT_OUTPUT_VOLTS 18U
 ```
 
 菜单初始化直接引用这些宏；调试邮箱`power_target_volts`仍默认取正向输出值。

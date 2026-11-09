@@ -141,12 +141,15 @@
 #endif
 
 /* Main nominal menu range12..40V; fresh input protection has endpoint margin.
- * All four MAIN modes share the electrical limits below. */
+ * MAIN shares these limits except the mode4 undervoltage trial below. */
 #define POWER_MAIN_INPUT_SETTING_MIN           12U
 #define POWER_MAIN_INPUT_SETTING_MAX           40U
 #define POWER_MAIN_OUTPUT_SETTING_MIN           0U
 #define POWER_MAIN_OUTPUT_SETTING_MAX          36U
 #define POWER_MAIN_BUCK_INPUT_MIN_VOLTS         9.0f
+/* User-requested reverse Boost trial after code2/IN8.99V at12->18V.
+ * Applies to request and all fresh input checks; other modes remain9V. */
+#define POWER_MAIN_REVERSE_BOOST_INPUT_MIN_VOLTS 7.0f
 #define POWER_MAIN_BUCK_INPUT_MAX_VOLTS        42.0f
 #define POWER_MAIN_BUCK_MAX_TARGET_VOLTS       36.0f
 /* Shared by all four MAIN modes, per user request. */

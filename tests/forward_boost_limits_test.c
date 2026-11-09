@@ -11,22 +11,23 @@ static void run_forward_boost(float target)
     CHECK(power_status.state == POWER_RUNNING && enabled_outputs == ALL_OUTPUTS);
 }
 
-static void main_uv9_boundaries(void)
+static void main_input_boundaries(void)
 {
     const unsigned phases[]={0U,1U,30U,31U,32U,33U};
     for(unsigned mode=1;mode<=4;mode++) {
         const unsigned reverse=mode>=3U;
         const float target=(mode==2U || mode==4U)?18.0f:6.0f;
         const float gain=reverse?ADC_RIGHT_VOLTS_PER_COUNT:ADC_LEFT_VOLTS_PER_COUNT;
-        const unsigned below=(unsigned)floorf(9.0f/gain);
-        CHECK(below*gain<9.0f && (below+1U)*gain>=9.0f);
-        /*9..10V must qualify both request and every fresh startup/run sample.*/
+        const float minimum=mode==4U?7.0f:9.0f;
+        const unsigned below=(unsigned)floorf(minimum/gain);
+        CHECK(below*gain<minimum && (below+1U)*gain>=minimum);
+        /*Mode4 uses7V; other MAIN modes retain9V, in every phase.*/
         stopped_samples(reverse?0:9.9f,reverse?9.9f:0,0);CHECK(request(mode,target));
         for(unsigned p=0;p<6;p++) {
             for(unsigned low=0;low<2;low++) {
                 stopped_samples(reverse?0:12,reverse?12:0,0);CHECK(request(mode,target));
                 for(unsigned n=0;n<phases[p];n++)period(reverse?0:12,reverse?12:0,0);
-                const float input=low?8.9f:9.1f;
+                const float input=minimum+(low?-0.1f:0.1f);
                 period(reverse?0:input,reverse?input:0,0);
                 if(low)CHECK(power_status.fault==POWER_FAULT_INPUT && enabled_outputs==0);
                 else CHECK(!power_status.fault);
@@ -52,7 +53,7 @@ static void main_uv9_boundaries(void)
 int main(void)
 {
     cold_boot();
-    main_uv9_boundaries();
+    main_input_boundaries();
     /* Catch applying 3 V only to the request, not to fresh cold-start samples. */
     for (unsigned sign = 0U; sign < 2U; ++sign) {
         float current = sign ? -0.98f : 0.98f;
@@ -142,6 +143,6 @@ int main(void)
     CHECK(power_status.fault == 0U);
     period(27.1f, 12.0f, 0.0f);
     CHECK(power_status.fault == POWER_FAULT_OUTPUT);
-    puts("All MAIN modes share cold3V, input9..42V and OVP1.5x/40V on their physical buses: PASS");
+    puts("MAIN cold3V/OVP1.5x/40V; reverse Boost input7..42V, other modes9..42V: PASS");
     return 0;
 }
