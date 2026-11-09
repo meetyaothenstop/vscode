@@ -119,8 +119,8 @@
  * Input settings select Buck/Boost in the menu; feedback still comes from ADC.
  * The debug mailbox also defaults to the forward output setting. */
 #if POWER_MAIN_APPLICATION
-#define POWER_FORWARD_DEFAULT_INPUT_VOLTS  12U
-#define POWER_FORWARD_DEFAULT_OUTPUT_VOLTS 24U
+#define POWER_FORWARD_DEFAULT_INPUT_VOLTS  18U
+#define POWER_FORWARD_DEFAULT_OUTPUT_VOLTS 3U
 #define POWER_REVERSE_DEFAULT_INPUT_VOLTS  12U
 #define POWER_REVERSE_DEFAULT_OUTPUT_VOLTS  6U
 #elif POWER_BENCH_12V_BUCK_TEST
