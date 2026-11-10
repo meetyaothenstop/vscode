@@ -55,42 +55,41 @@ static void model(void)
 }
 static void reverse_model(void)
 {
-    reverse_configure(0.1f,18,6);reverse_initialize(0);
+    reverse_configure(0.1f,18,6); reverse_initialize(0);
     reverse_U=(reverse_ExternalInputs){.mode=4,.V_right=12,.V_left=1};
     reverse_main_boost_step();
-    CHECK(fabsf(reverse_B.DiscreteTransferFcn2-0.11092144101852841f)<1e-6f);
+    CHECK(fabsf(reverse_B.DiscreteTransferFcn1-0.11092144101852841f)<1e-6f);
     reverse_main_boost_step();
-    CHECK(fabsf(reverse_B.DiscreteTransferFcn2-0.30815719090033147f)<1e-6f);
-    reverse_configure(0.1f,18,6);reverse_initialize(0);
+    CHECK(fabsf(reverse_B.DiscreteTransferFcn1-0.30815719090033147f)<1e-6f);
+    reverse_configure(0.1f,18,6); reverse_initialize(0);
     reverse_U=(reverse_ExternalInputs){.mode=4,.V_right=12,.V_left=0};
-    for(unsigned n=0;n<4;n++)reverse_main_boost_step();
-    float ramp=reverse_B.Saturation4,precharge=reverse_B.DiscreteIntegrator4;
+    for(unsigned n=0;n<4;n++) reverse_main_boost_step();
+    float ramp=reverse_B.Saturation4, precharge=reverse_B.Saturation6;
     reverse_main_boost_step();
-    CHECK(reverse_B.Saturation4==ramp); /*Reverse reference waits for CTRL_RUN.*/
-    CHECK(fabsf(reverse_B.DiscreteIntegrator4-precharge-0.02f)<1e-6f);
-    reverse_U.V_left=12;
-    for(unsigned n=0;n<100 && !reverse_Y.CTRL_RUN_R;n++)reverse_main_boost_step();
-    CHECK(reverse_Y.CTRL_RUN_R);
-    ramp=reverse_B.Saturation4;reverse_main_boost_step();
-    CHECK(fabsf(reverse_B.Saturation4-ramp-0.0048f)<1e-6f);
+    CHECK(fabsf(reverse_B.Saturation4-ramp-0.0048f)<1e-6f); /*120V/s*40us*/
+    CHECK(fabsf(reverse_B.Saturation6-precharge-0.02f)<1e-6f); /*500A/s*/
     reverse_configure(18,18,6);reverse_initialize(0);
     reverse_U=(reverse_ExternalInputs){.mode=4,.V_right=12,.V_left=12};
-    for(unsigned n=0;n<100 && !reverse_Y.CTRL_RUN_R;n++)reverse_main_boost_step();
+    for(unsigned n=0;n<100 && !reverse_Y.CTRL_RUN_R;n++) reverse_main_boost_step();
     CHECK(reverse_Y.CTRL_RUN_R);
-    float integral=reverse_X.Integrator_x;
-    float state=reverse_X.DiscreteTransferFcn,alpha=reverse_B.DiscreteIntegrator5;
+    /* On enable voltage phase resets to1; the next update is five calls away. */
+    float integral=reverse_B.DiscreteIntegrator, previous_error=reverse_B.Product2;
+    float previous_state=reverse_X.DiscreteTransferFcn;
+    float alpha=reverse_B.Saturation5;
     unsigned updates=reverse_voltage_updates;
     for(unsigned n=0;n<4;n++)reverse_main_boost_step();
     CHECK(reverse_voltage_updates==updates);
-    reverse_main_boost_step();CHECK(reverse_voltage_updates==updates+1);
-    CHECK(fabsf(reverse_X.Integrator_x-integral-0.0002f*10*reverse_B.Product3)<1e-5f);
-    float filtered=0.38416061091267395f*12+0.47316247187175015f*state;
-    CHECK(fabsf(reverse_B.Product3-(18-filtered))<1e-5f);
-    CHECK(fabsf(reverse_B.DiscreteIntegrator5-alpha-5*0.004f)<1e-6f);
-    float current_integral=reverse_B.DiscreteIntegrator1;
-    float derivative=reverse_X.DiscreteIntegrator1_i2_prevU;
     reverse_main_boost_step();
-    CHECK(fabsf(reverse_B.DiscreteIntegrator1-current_integral-0.00004f*derivative)<1e-6f);
+    CHECK(reverse_voltage_updates==updates+1U);
+    CHECK(fabsf(reverse_B.DiscreteIntegrator-integral-0.0002f*8*previous_error)<1e-5f);
+    /*6238/(s+6238) Tustin at200us, evaluated from prior state.*/
+    float filtered=0.38416061091267395f*12+0.47316247187175015f*previous_state;
+    CHECK(fabsf(reverse_B.Product2-(18-filtered))<1e-5f);
+    CHECK(fabsf(reverse_B.Saturation5-alpha-5*0.004f)<1e-6f); /*100/s*40us*/
+    float current_integral=reverse_B.DiscreteIntegrator1;
+    float current_derivative=reverse_X.DiscreteIntegrator1_i2_prevU;
+    reverse_main_boost_step();
+    CHECK(fabsf(reverse_B.DiscreteIntegrator1-current_integral-0.00004f*current_derivative)<1e-6f);
 }
 int main(void)
 {

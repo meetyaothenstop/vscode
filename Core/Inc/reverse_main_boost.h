@@ -12,5 +12,6 @@
  * Public reverse_step/hold retain50/10kHz (150kHz in single-rate builds).
  * Reinitialize while stopped before switching mode or entry profile. */
 void reverse_main_boost_step(void);
+/* Compatibility normal-step alias; MAIN production does not call HOLD. */
 void reverse_main_boost_hold_step(void);
 #endif

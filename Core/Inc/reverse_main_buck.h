@@ -8,5 +8,6 @@
 /* Backend-only contract: initialized mode3, fresh finite ADC inputs and
  * positive right-input voltage qualified by Power_TimerIRQ protections. */
 void reverse_main_buck_step(void);
+/* Compatibility normal-step alias; MAIN production does not call HOLD. */
 void reverse_main_buck_hold_step(void);
 #endif

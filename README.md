@@ -6,7 +6,25 @@ HEX为`MDK-ARM/bidreaction/bidreaction.hex`。保留正向Buck/Boost及反向Buc
 
 ## 当前版本
 
-当前板测反馈：7V反向Boost可RUNNING，但12→18V/100Ω的实测与显示输出约16V且抖动，
+2026-11-10：**MAIN反向Buck/Boost完整共用正向控制**，版本`FCTRL1`，
+标签`main-reverse-forward-control-20261110`。正反向独立状态，反向只映射端口、电流符号和模式。
+电压PI0.3/8、Boost前馈0.2倍、90%Vin预充、初始化/滤波/软启动/抗饱和与正向一致；
+取消MAIN反向独有HOLD/重新软启动，独立OVP和其他电气/ADC/方向/时序保护保持。
+反向Boost欠压仍7V试验，其余三模式9V；ADC物理通道保持。
+两Buck50/10kHz、两Boost25/5kHz，PWM/ADC/快速保护150kHz；默认正向18→3V、反向12→18V。
+首页`MAIN ADC FCTRL1 R7`，反向页面`REVERSE BUCK/BOOST FCTRL1`。
+
+89组完整回归、144万步对备份正向算法完整状态逐位对比、主/bench ARM6.18构建0错误0警告、
+实际映像核验通过；bench HEX保持。主HEX SHA256：
+`8335E0910AECE02CA2D87E3F88C80C4CA665CDF798BE3172CDD0171EAA39390F`。
+模型12→18V约17.994V；24/35→36V启动正反两方向均触发原过流保护，不能称全范围稳压通过。
+新算法启动电流需求可能超过现有0.9A限流，实板仍待用户下载验证；没有证实16V抖动已解决。
+修改前`pre-reverse-forward-control-20261110`已先上传核对，
+见[版本与备份对照](docs/版本与备份对照.md)和[替换与测试记录](docs/反向共用正向控制测试-20261110.md)。
+
+## 反向7V试验及16V现场历史（2026-11-09）
+
+修改前板测反馈：7V反向Boost可RUNNING，但12→18V/100Ω的实测与显示输出约16V且抖动，
 输入显示12V、电源面板约0.3A、CC不亮。根因未确定，待核对HOLD/参考/占空比；
 本次排查未改固件。源码及合成机制证据见[16V抖动排查](docs/反向Boost16V抖动排查-20261109.md)。
 

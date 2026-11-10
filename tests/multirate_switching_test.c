@@ -3,7 +3,7 @@
 #define main legacy_test_main
 #include "power_control_test.c"
 #undef main
-static void plant(unsigned mode, double source, double target)
+static void plant_case(unsigned mode, double source, double target, unsigned expected_fault)
 {
     const unsigned steps=200U;
     const double dt=1.0/(150000.0*steps), load=100.0;
@@ -17,9 +17,13 @@ static void plant(unsigned mode, double source, double target)
         if(mode==2U && n>3490U) fprintf(stderr,"n%u v%.5f si%.5f d%.5f ref%.5f iref%.5f int%.5f cmp%u/%u boost%u pre%u\n",n,v,si,power_status.d_cmd,power_status.v_reference,forward_B.Saturation,forward_B.DiscreteIntegrator1,(unsigned)active_left_compare,(unsigned)active_right_compare,forward_Y.BOOST_RUN,forward_Y.PRECHARGE_DONE);
 #endif
         if(power_status.fault) {
-            fprintf(stderr,"mode%u cycle%u v%.5f i%.5f fault%u/%u\n",mode,n,v,i,
+            if(!expected_fault)fprintf(stderr,"mode%u cycle%u v%.5f i%.5f fault%u/%u\n",mode,n,v,i,
                     (unsigned)power_status.fault,(unsigned)power_status.fault_detail);
-            CHECK(!power_status.fault);
+            CHECK(expected_fault && power_status.fault==expected_fault);
+            CHECK(enabled_outputs==0 && fabsf(power_status.fault_il)>=7.5f);
+            before_call();Power_ControlIRQ();after_call();CHECK(enabled_outputs==0);
+            printf("Expected protected startup shutdown mode%u %.0f->%.0fV: fault%u at PWM%u, sampledIL%.4fA\n",mode,source,target,(unsigned)power_status.fault,n,power_status.fault_il);
+            stop();return;
         }
         /* Worker publishes after fast IRQ; nearest safe fast IRQ writes
          * the result, then both compares preload at the following PWM. */
@@ -54,14 +58,23 @@ static void plant(unsigned mode, double source, double target)
     }
     printf("Multirate real backend mode%u %.0f->%.0fV: output%.3fV peak%.3fV steps%u voltage%u\n",
            mode,source,target,v,peak,start_steps,voltage_steps);
+    CHECK(!expected_fault);
     CHECK(fabs(v-target)<0.65);
     CHECK(start_steps>((mode==2U||mode==4U)?14000U:25000U) && start_steps<((mode==2U||mode==4U)?15001U:30001U));
     CHECK(voltage_steps>((mode==2U||mode==4U)?2800U:4500U) && voltage_steps<((mode==2U||mode==4U)?3100U:6100U));
     stop();
 }
+static void plant(unsigned mode,double source,double target){plant_case(mode,source,target,0);}
 int main(void)
 {
     cold_boot();
+#ifdef REVERSE_FORWARD_SAFETY_RANGE
+    plant(4,12,18);plant(4,12,36);
+    plant_case(4,24,36,POWER_FAULT_CURRENT);plant_case(4,35,36,POWER_FAULT_CURRENT);
+    plant_case(2,24,36,POWER_FAULT_CURRENT);plant_case(2,35,36,POWER_FAULT_CURRENT);
+    puts("Shared forward control startup envelope:12V reverse regulation; mirrored24/35V overcurrent shutdown retained: PASS");
+    return 0;
+#else
     plant(1U,24.0,12.0); plant(2U,12.0,24.0);
     plant(2U,12.0,18.0); /* Current board-test target, through the real worker. */
     plant(3U,12.0,6.0); plant(4U,12.0,24.0);
@@ -72,4 +85,5 @@ int main(void)
 #endif
     puts("Four-mode nominal switched plant with real multirate backend: PASS");
     return 0;
+#endif
 }

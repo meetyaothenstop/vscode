@@ -925,6 +925,7 @@ static void hardware_enable_interleavings(void)
         CHECK(protection_fault_after_safe_poll == 0U);
         expect_fault(256U);
         clear_fault();
+#if !POWER_MAIN_APPLICATION
         /* HOLD resume also enables the low sides after the entry poll. */
         start_running(4U, 12.0f, 36.0f);
         for (guard = 0U; guard < 1000U && power_status.state != POWER_HOLD; ++guard)
@@ -935,8 +936,13 @@ static void hardware_enable_interleavings(void)
         CHECK(protection_fault_after_safe_poll == 0U);
         expect_fault(256U);
         clear_fault();
+#endif
     }
-    puts("Short faults around cold/bootstrap/arming/changeover/HOLD enables remain latched: PASS");
+#if POWER_MAIN_APPLICATION
+    puts("Short faults around MAIN cold/bootstrap/arming/changeover enables remain latched: PASS");
+#else
+    puts("Legacy short faults around cold/bootstrap/arming/changeover/HOLD enables remain latched: PASS");
+#endif
 }
 #if defined(POWER_UNIFIED_DIAGNOSTICS) && POWER_UNIFIED_DIAGNOSTICS
 static void unified_first_fault_diagnostics(void)
@@ -1427,92 +1433,21 @@ static void main_reverse_buck12(void)
     puts("MAIN reverse12->6: right input9..42V, left OVP9V, startup1A/3V all stages, negative current7.5A, first fault and zero OFF: PASS");
 }
 
-/* Catch a low-side enable stacked onto the late recovery calculation, a
- * shortened bootstrap, or a stale recovery which can rearm after STOP/fault. */
-static void main_reverse_enter_hold(void)
+/* MAIN follows forward continuous regulation; electrical OVP is separate. */
+static void main_reverse_continuous(void)
 {
-    start_running(3U, 12.0f, 6.0f);
-    unsigned n;
-    for (n = 0U; n < 16000U && power_status.state != POWER_HOLD; ++n)
-        period(6.1f, 12.0f, 0.0f);
-    CHECK(power_status.state == POWER_HOLD && enabled_outputs == 0U);
-}
-
-static void main_reverse_prepare_resume(void)
-{
-    main_reverse_enter_hold();
-    period(4.38342094f, 11.9703655f, -0.0931873322f);
-    CHECK(power_status.state == POWER_BOOTSTRAP && power_status.fault == 0U);
-    CHECK(enabled_outputs == 0U && HRTIM1->sCommonRegs.OENR == 0U);
-    CHECK(fabsf(power_status.v_reference - power_status.v_left) < 0.00001f);
-}
-
-static void main_reverse_staged_resume(void)
-{
-    main_reverse_prepare_resume();
-    const float prepared_duty = power_status.d_cmd;
-    period(4.3f, 12.0f, 0.0f);
-    CHECK(power_status.state == POWER_BOOTSTRAP && enabled_outputs == LOW_OUTPUTS);
-    CHECK(power_status.d_cmd == prepared_duty); /* No second controller step. */
-    for (unsigned n = 0U; n < 29U; ++n) {
-        period(4.3f, 12.0f, 0.0f);
-        CHECK(power_status.state == POWER_BOOTSTRAP && enabled_outputs == LOW_OUTPUTS);
+    for(unsigned mode=3;mode<=4;mode++) {
+        start_running(mode,12,mode==3?6:18);
+        for(unsigned n=0;n<10000;n++) {
+            period(mode==3?6.1f:(n%60==0?18.2f:16.0f),12,0);
+            CHECK(!power_status.fault && power_status.state!=POWER_HOLD);
+            CHECK(power_status.state!=POWER_BOOTSTRAP && power_status.state!=POWER_ARMING);
+        }
+        CHECK(power_status.state==POWER_RUNNING && enabled_outputs==ALL_OUTPUTS);
+        period(mode==3?9.1f:27.1f,12,0);expect_fault(POWER_FAULT_OUTPUT);
+        CHECK(enabled_outputs==0);
     }
-    period(4.3f, 12.0f, 0.0f);
-    CHECK(power_status.state == POWER_ARMING && enabled_outputs == LOW_OUTPUTS);
-    check_plan(3U); /* Prepared compare pair survives the entire low interval. */
-    period(4.3f, 12.0f, 0.0f);
-    CHECK(power_status.state == POWER_ARMING && enabled_outputs == LOW_OUTPUTS);
-    CHECK(active_left_compare == power_status.left_compare &&
-          active_right_compare == power_status.right_compare);
-    period(4.3f, 12.0f, 0.0f);
-    CHECK(power_status.state == POWER_RUNNING && enabled_outputs == ALL_OUTPUTS);
-
-    /* A changed fresh sample cancels the pending enable without cold-start
-     * rejection of a legitimately charged HOLD output. Both current signs. */
-    for (unsigned kind = 0U; kind < 3U; ++kind) {
-        main_reverse_prepare_resume();
-        period(kind == 0U ? 6.0f : 4.3f, 12.0f,
-               kind == 1U ? 0.3f : (kind == 2U ? -0.3f : 0.0f));
-        CHECK(power_status.state == POWER_HOLD && power_status.fault == 0U);
-        CHECK(enabled_outputs == 0U && HRTIM1->sCommonRegs.OENR == 0U);
-        period(4.3f, 12.0f, 0.0f);
-        CHECK(power_status.state == POWER_BOOTSTRAP && enabled_outputs == 0U);
-        period(4.3f, 12.0f, 0.0f);
-        CHECK(power_status.state == POWER_BOOTSTRAP && enabled_outputs == LOW_OUTPUTS);
-    }
-    for (unsigned action = 0U; action < 3U; ++action) {
-        main_reverse_prepare_resume();
-        if (action == 0U) stop();
-        else if (action == 1U) CHECK(request(3U, 0.0f));
-        else clear_fault();
-        for (unsigned n = 0U; n < 35U; ++n) period(4.3f, 12.0f, 0.0f);
-        CHECK(power_status.state == POWER_STOPPED && enabled_outputs == 0U);
-        start_running(1U, 24.0f, 12.0f); /* Pending reverse work cannot leak modes. */
-    }
-    const uint32_t faults[] = {POWER_FAULT_ADC, POWER_FAULT_INPUT,
-                              POWER_FAULT_OUTPUT, POWER_FAULT_CURRENT};
-    for (unsigned kind = 0U; kind < 4U; ++kind) {
-        main_reverse_prepare_resume();
-        irq(kind == 2U ? 9.1f : 4.3f, kind == 1U ? 8.9f : 12.0f,
-            kind == 3U ? -7.6f : 0.0f, kind == 0U ? 0U : ADC_ISR_JEOS, 1000U, 640U);
-        expect_fault(faults[kind]);
-        CHECK(HRTIM1->sCommonRegs.OENR == 0U);
-        clear_fault();
-        for (unsigned n = 0U; n < 35U; ++n) period(4.3f, 12.0f, 0.0f);
-        CHECK(power_status.state == POWER_STOPPED && enabled_outputs == 0U);
-    }
-    for (unsigned poll = 1U; poll <= 2U; ++poll) {
-        main_reverse_prepare_resume();
-        protection_fault_after_safe_poll = poll;
-        period(4.3f, 12.0f, 0.0f);
-        CHECK(protection_fault_after_safe_poll == 0U);
-        expect_fault(POWER_FAULT_HARDWARE);
-        clear_fault();
-        period(4.3f, 12.0f, 0.0f);
-        CHECK(power_status.state == POWER_STOPPED && enabled_outputs == 0U);
-    }
-    puts("MAIN reverse HOLD: all-off staged prepare, fresh recheck,30+2 full intervals, saved pair, cancellation/faults and guarded enable: PASS");
+    puts("MAIN reverse continuous target crossing/spikes, no old HOLD/resume, OVP retained: PASS");
 }
 
 static void main_mode_protection(void)
@@ -1687,53 +1622,27 @@ static void main_first_control_profile(void)
 #endif
 
 #if defined(POWER_TEST_TIMING)
-static void main_resume_exit_guards(void)
+static void main_reverse_exit_guards(void)
 {
-    static const struct {
-        uint32_t elapsed, phase;
-        unsigned pending, detail;
-    } cases[] = {
-        {907U, 31072U, 0U, 5U}, /* User's actual T5 remains rejected. */
-        {936U, 29952U, 0U, 0U},
-        {937U, 29088U, 0U, 5U},
-        {850U, 29953U, 0U, 5U},
-        {900U, 64U, 1U, 6U},
-        {937U, 29953U, 1U, 5U}, /* T5 wins over pending REP. */
+    const struct {uint32_t elapsed,phase;unsigned pending,detail;} cases[]={
+        {907,31072,0,5},{936,29952,0,0},{937,29088,0,5},
+        {850,29953,0,5},{900,64,1,6},{937,29953,1,5}
     };
-    for (unsigned phase = 0U; phase < 3U; ++phase) {
-        for (unsigned n = 0U; n < sizeof(cases)/sizeof(cases[0]); ++n) {
-            if (phase == 0U) main_reverse_enter_hold();
-            else main_reverse_prepare_resume();
-            timing_event.enabled = 1U;
-            timing_event.reads = 0U;
-            timing_event.pending = cases[n].pending;
-            timing_event.exit_only = phase != 0U;
-            timing_event.write_elapsed = 792U;
-            timing_event.write_counter = 27232U;
-            timing_event.exit_elapsed = cases[n].elapsed;
-            timing_event.exit_counter = cases[n].phase;
-            period(phase == 2U ? 6.0f : 4.38342094f, 11.9703655f, -0.0931873322f);
-            timing_event.enabled = timing_event.exit_only = 0U;
-            if (cases[n].detail) {
-                expect_fault(POWER_FAULT_TIMING);
-                CHECK(power_status.fault_detail == cases[n].detail);
-                CHECK(power_status.fault_elapsed_cycles == cases[n].elapsed);
-                CHECK(power_status.fault_counter_ticks == cases[n].phase);
-                if (phase != 1U) CHECK(HRTIM1->sCommonRegs.OENR == 0U);
-                const PowerStatus first = power_status;
-                period(0.0f, 12.0f, 0.0f);
-                CHECK(power_status.fault_counter_ticks == first.fault_counter_ticks);
-                clear_fault();
-                period(4.3f, 12.0f, 0.0f);
-                CHECK(power_status.state == POWER_STOPPED && enabled_outputs == 0U);
-            } else {
-                CHECK(power_status.fault == 0U);
-                CHECK(power_status.state == (phase == 2U ? POWER_HOLD : POWER_BOOTSTRAP));
-                CHECK(enabled_outputs == (phase == 1U ? LOW_OUTPUTS : 0U));
-            }
-        }
+    for(unsigned n=0;n<6;n++) {
+        start_running(3,12,6);
+        timing_event.enabled=1;timing_event.reads=0;timing_event.exit_only=0;
+        timing_event.pending=cases[n].pending;
+        timing_event.write_elapsed=792;timing_event.write_counter=27232;
+        timing_event.exit_elapsed=cases[n].elapsed;timing_event.exit_counter=cases[n].phase;
+        period(6.1f,12,0);timing_event.enabled=timing_event.exit_only=0;
+        if(cases[n].detail) {
+            expect_fault(POWER_FAULT_TIMING);
+            CHECK(power_status.fault_detail==cases[n].detail && enabled_outputs==0);
+            CHECK(power_status.fault_elapsed_cycles==cases[n].elapsed && power_status.fault_counter_ticks==cases[n].phase);
+            clear_fault();period(0,12,0);CHECK(power_status.state==POWER_STOPPED && enabled_outputs==0);
+        } else CHECK(power_status.state==POWER_RUNNING && enabled_outputs==ALL_OUTPUTS);
     }
-    puts("MAIN reverse resume: prepare/early-enable/cancel all retain inclusive936/29952, T5/T6 priority and907/31072 rejection: PASS");
+    puts("MAIN reverse continuous exit guards retain936/29952 boundaries and T5/T6 priority: PASS");
 }
 
 static void main_write_phase_budget(void)
@@ -1856,13 +1765,13 @@ int main(void)
     main_forward_ovp_bounds();
     main_forward_startup1a3v();
     main_reverse_buck12();
-    main_reverse_staged_resume();
+    main_reverse_continuous();
     main_mode_protection();
     main_adc_mode_selection();
     main_stop_and_clear_require_fresh_sample();
 #if defined(POWER_TEST_TIMING)
     main_write_phase_budget();
-    main_resume_exit_guards();
+    main_reverse_exit_guards();
 #endif
 #if POWER_UNIFIED_DIAGNOSTICS
     main_first_control_profile();

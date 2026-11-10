@@ -8,6 +8,10 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "power_build_config.h"
+#if POWER_MAIN_APPLICATION
+#include "forward.h"
+#endif
 
 /* Model floating point type */
 typedef float reverse_FloatType;
@@ -23,6 +27,10 @@ extern const char * reverse_errorStatus;
 extern const float reverse_sampleTime;
 
 
+#if POWER_MAIN_APPLICATION
+/* MAIN controller fields match forward_B/X. */
+typedef forward_ModelStates reverse_ModelStates;
+#else
 /*
  * Model states */
 typedef struct
@@ -45,6 +53,7 @@ typedef struct
    float DiscreteIntegrator5_i1_x; /* reverse/Discrete Integrator5 */
    float DiscreteIntegrator5_i2_prevU; /* reverse/Discrete Integrator5 */
 } reverse_ModelStates;
+#endif
 extern reverse_ModelStates reverse_X;
 
 
@@ -73,6 +82,10 @@ typedef struct
 extern reverse_ExternalOutputs reverse_Y;
 
 
+#if POWER_MAIN_APPLICATION
+/* MAIN controller fields match forward_B/X. */
+typedef forward_BlockOutputs reverse_BlockOutputs;
+#else
 /* Block outputs */
 typedef struct
 {
@@ -101,6 +114,7 @@ typedef struct
    float Gain2;                    /* reverse/Gain2 */
    float Sum3;                     /* reverse/Sum3 */
 } reverse_BlockOutputs;
+#endif
 extern reverse_BlockOutputs reverse_B;
 
 typedef struct {
@@ -110,10 +124,10 @@ typedef struct {
 void reverse_configure(float start_volts, float target_volts, float current_limit);
 void reverse_initialize(float time);
 void reverse_step(void);
-/* All gates off: advance filters/reference without winding up control PIs. */
+/* NON-MAIN historical hold. MAIN compatibility alias advances a normal step;
+ * MAIN production has forward-style continuous control and no HOLD caller. */
 void reverse_hold_step(void);
-/* Keep the Boost/precharge latch, restart the reference from the measured
- * charged output and clear PI history before the bootstrap refresh. */
+/* NON-MAIN historical resume. MAIN compatibility no-op: no reference reset. */
 void reverse_prepare_resume(float output_volts);
 void reverse_terminate(void);
 

@@ -78,7 +78,7 @@ static __attribute__((noinline)) void event_capture(uint32_t code,uint32_t detai
     f->start_pending=start_pending;f->bootstrap_resume=bootstrap_resume;
     f->bootstrap_remaining=power_status.state==POWER_BOOTSTRAP?bootstrap_cycles:0U;
     f->arming_remaining=power_status.state==POWER_ARMING?arming_cycles:0U;
-    f->resume_pending=resume_bootstrap_pending;f->polarity_samples=reverse_polarity_cycles;
+    f->resume_pending=0U; /* MAIN has no output-threshold HOLD/resume. */f->polarity_samples=reverse_polarity_cycles;
     f->target_volts=active_target;f->duty=power_status.d_cmd;f->reference_volts=power_status.v_reference;
     f->left_compare=power_status.left_compare;f->right_compare=power_status.right_compare;
     unsigned fg=power_event.foreground.active,ui=power_event.ui.active;

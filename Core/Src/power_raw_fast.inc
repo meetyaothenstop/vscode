@@ -2,9 +2,6 @@
  * original calibrated predicates, preserving strict/inclusive boundaries. */
 static inline unsigned raw_output(void)
 { return active_mode>=3U?power_status.raw_vh:power_status.raw_vl; }
-static inline int raw_can_resume(void)
-{ return Raw_Contains(raw_policy.resume_output,raw_output()) &&
-         Raw_Contains(raw_policy.resume_current,power_status.raw_il); }
 static __attribute__((noinline)) void raw_checks(unsigned starting,unsigned reverse)
 {
     unsigned input=reverse?power_status.raw_vl:power_status.raw_vh;

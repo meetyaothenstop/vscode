@@ -203,7 +203,7 @@ static void test_zero_off_is_submitted_in_both_directions_and_fault(void)
         assert(starts == 1U && last_mode == (reverse ? 3U : 1U) && last_target == 0.0f);
         assert(!pending && power_status.state == POWER_STOPPED);
         settle();
-        assert(strstr(drawn.rows[4], "0 V") && strstr(drawn.rows[0], (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? (POWER_OLED_FRAME_RESUME ? (POWER_ADC_FAULT_DETAILS ? "BUCK M-ADG2" : "BUCK M-FRM1") : "BUCK M-EVT1") : "BUCK M-RAW1") : "BUCK M-50/10") : "BUCK M-RRES1")));
+        assert(strstr(drawn.rows[4], "0 V") && strstr(drawn.rows[0], (reverse ? "BUCK FCTRL1" : POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? (POWER_OLED_FRAME_RESUME ? (POWER_ADC_FAULT_DETAILS ? "BUCK M-ADG2" : "BUCK M-FRM1") : "BUCK M-EVT1") : "BUCK M-RAW1") : "BUCK M-50/10") : "BUCK M-RRES1")));
         power_status.state = POWER_FAULT;
         power_status.fault = 8U;
         key(3);
@@ -220,9 +220,9 @@ static void test_running_frame_cadence_busy_stop_and_fault_restart(void)
     setup();
     service(0U);
 #if POWER_MAIN_ADC_SOFTWARE_ONLY
-    assert(strstr(drawn.rows[0], POWER_MULTIRATE_CONTROL ? "MAIN ADC B25/5 R7" : "MAIN ADC RBUCK RES1"));
+    assert(strstr(drawn.rows[0], POWER_MULTIRATE_CONTROL ? "MAIN ADC FCTRL1 R7" : "MAIN ADC RBUCK RES1"));
 #else
-    assert(strstr(drawn.rows[0], POWER_MULTIRATE_CONTROL ? "MAIN HW B25/5 R7" : "MAIN HW GUARD 6A"));
+    assert(strstr(drawn.rows[0], POWER_MULTIRATE_CONTROL ? "MAIN HW FCTRL1 R7" : "MAIN HW GUARD 6A"));
 #endif
     key(3); key(2); edit(-100); edit(6); key(2); key(3); /* Explicit Buck output. */
     pending = 0U;

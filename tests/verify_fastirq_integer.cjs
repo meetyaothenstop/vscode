@@ -1,7 +1,8 @@
 const fs=require('fs'),assert=require('assert');
 const asm=fs.readFileSync(process.argv[2]||'.superpowers/fastirq-raw/main.disasm','utf8');
 const labels=[...asm.matchAll(/^    ([A-Za-z_$][\w$]*)\r?$/gm)];
-const names=['Power_TimerIRQ','control_slice','control_modulate','control_write','raw_checks','raw_can_resume','enable_outputs','PWM_EntryIsTimely','PowerProtection_FaultPending'];
+const names=['Power_TimerIRQ','control_slice','control_modulate','raw_checks','enable_outputs','PWM_EntryIsTimely','PowerProtection_FaultPending'];
+if(labels.some(m=>m[1]==='control_write'))names.push('control_write');
 // armclang may inline bootstrap into Power_TimerIRQ, whose whole body is checked.
 for(const m of labels)if(m[1]==='begin_bootstrap'||m[1].startsWith('$Ven$'))names.push(m[1]);
 for(const name of names) {

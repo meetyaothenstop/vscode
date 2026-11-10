@@ -73,7 +73,7 @@ static void test_identity_and_full_width_headers(void)
     press(&menu, MENU_KEY_BACK);
     Menu_Render(&menu, &data, &frame);
 #if POWER_MULTIRATE_CONTROL
-    assert(strstr(frame.rows[0], POWER_MAIN_ADC_SOFTWARE_ONLY ? "MAIN ADC B25/5 R7" : "MAIN HW B25/5 R7"));
+    assert(strstr(frame.rows[0], POWER_MAIN_ADC_SOFTWARE_ONLY ? "MAIN ADC FCTRL1 R7" : "MAIN HW FCTRL1 R7"));
 #elif POWER_UNIFIED_DIAGNOSTICS
     assert(strstr(frame.rows[0], POWER_MAIN_ADC_SOFTWARE_ONLY ?
                   "MAIN ADC DIAG 6A" : "MAIN HW DIAG 6A"));
@@ -92,7 +92,7 @@ static void test_identity_and_full_width_headers(void)
     menu.direction = MENU_REVERSE;
     menu.settings[MENU_REVERSE] = (MenuSettings){12U, 24U};
     Menu_Render(&menu, &data, &frame);
-    if(POWER_MULTIRATE_CONTROL)assert(strstr(frame.rows[0], "REVERSE BOOST R25V7"));
+    assert(strstr(frame.rows[0], "REVERSE BOOST FCTRL1"));
     menu.settings[MENU_REVERSE] = (MenuSettings){36U, 36U};
     Menu_Render(&menu, &data, &frame);
     assert(strstr(frame.rows[0], POWER_UNIFIED_DIAGNOSTICS ? "REVERSE EQUAL M-DIAG" : (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? (POWER_OLED_FRAME_RESUME ? (POWER_ADC_FAULT_DETAILS ? "REVERSE EQUAL M-ADG2" : "REVERSE EQUAL M-FRM1") : "REVERSE EQUAL M-EVT1") : "REVERSE EQUAL M-RAW1") : "REVERSE EQUAL M-50/10") : "REVERSE EQUAL M-RRES1")));

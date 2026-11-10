@@ -38,7 +38,7 @@ int main(void)
     near(forward_B.DiscreteIntegrator,0.0f);
     forward_step();near(forward_B.DiscreteIntegrator,0.0008f); /*8/s x1V x100us*/
     init(3U,6.0f); reverse_U.V_left=1.0f; reverse_step();
-    near(reverse_B.Product3,5.7622532f);
+    near(reverse_B.Product2,5.7622532f);
     previous=reverse_B.Saturation;
     for(unsigned n=0;n<4;n++) {
         reverse_U.V_left=2.0f; reverse_step();

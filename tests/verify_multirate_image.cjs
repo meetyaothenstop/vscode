@@ -37,14 +37,22 @@ for(const [name,bytes] of [['oled_commands',4],['oled_data',129],['oled_dma',96]
 }
 for(const [name,irq] of [['DMA1_Channel1_IRQHandler',11],['I2C1_EV_IRQHandler',31],['I2C1_ER_IRQHandler',32]])
  assert(word(0x08000000+(16+irq)*4)===(address(name)|1),name+' vector');
-for(const name of ['PendSV_Handler','Power_ControlIRQ','Power_TimerIRQ','control_slice','control_modulate','control_write','reverse_main_boost_step','reverse_main_boost_hold_step']){
+for(const name of ['PendSV_Handler','Power_ControlIRQ','Power_TimerIRQ','control_slice','control_modulate','reverse_main_boost_step','reverse_main_buck_step','reverse_core_boost_step','reverse_core_buck_step']){
  const a=address(name);assert(a>=0x10000000&&a<0x10008000,name+' outside CCM');
 }
 const asm=fs.readFileSync(artifactDir+'/main.disasm','utf8');
 assert(/PendSV_Handler[\s\S]{0,400}B\.W\s+Power_ControlIRQ/.test(asm),'PendSV does not dispatch worker');
 const worker=asm.match(/\n    Power_ControlIRQ\r?\n([\s\S]*?)(?=\n    [A-Za-z_$][\w$]*\r?\n)/);
 assert(worker,'Missing disassembled worker');
-for(const name of ['reverse_main_boost_step','reverse_main_boost_hold_step'])
+for(const name of ['reverse_main_boost_step','reverse_main_buck_step'])
  assert(new RegExp('\\bBL(?:\\.W)?\\s+'+name+'\\b').test(worker[1]),'Worker does not call '+name);
+const labels=[...asm.matchAll(/^    ([A-Za-z_$][\w$]*)\r?$/gm)];
+function body(name){const i=labels.findIndex(m=>m[1]===name);assert(i>=0,'Missing '+name);return asm.slice(labels[i].index,labels[i+1]?.index||asm.length);}
+/* The compiler may inline control_write into both mandatory checked callers. */
+if(labels.some(m=>m[1]==='control_write'))assert(address('control_write')>=exec && address('control_write')<exec+size);
+for(const [wrapper,core] of [['reverse_main_boost_step','reverse_core_boost_step'],['reverse_main_buck_step','reverse_core_buck_step']])
+ assert(new RegExp('\\bBL(?:\\.W)?\\s+'+core+'\\b').test(body(wrapper)),wrapper+' does not call shared core');
+for(const name of ['Power_ControlIRQ','Power_TimerIRQ'])
+ assert(!/\b(?:reverse_prepare_resume|reverse_\w*hold_step)\b/.test(body(name)),name+' still calls old HOLD/resume');
 assert(address('Power_EmergencyOff')>=0x08000000&&address('Power_EmergencyOff')<0x08020000);
-console.log('Actual HEX vectors/CCM copy/both Boost worker branches/2KiB stack/DMA SRAM and AXF byte export: PASS');
+console.log('Actual HEX vectors/CCM copy/shared reverse core/no old HOLD calls/2KiB stack/DMA SRAM and AXF byte export: PASS');

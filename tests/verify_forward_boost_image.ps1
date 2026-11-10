@@ -41,6 +41,8 @@ if (!@($worker.Lines | Where-Object { $_ -cmatch '\bBL(?:\.W)?\s+forward_main_bo
     throw 'Real worker does not call the protected Boost step'
 }
 foreach ($name in @('Power_TimerIRQ','raw_checks','control_slice','control_write','control_modulate')) {
+    # Optional out-of-line helper; its two callers remain mandatory above/below.
+    if ($name -eq 'control_write' -and $mapText -notmatch '(?m)^\s+control_write\s+0x') { continue }
     $f = Read-Function $name
     if (@($f.Lines | Where-Object { $_ -cmatch '^\s*0x[0-9a-fA-F]+:\s+[0-9a-fA-F]+\s+\S+\s+V[A-Z0-9.]+\s' }).Count) {
         throw "Fast IRQ function contains FP instructions: $name"

@@ -94,24 +94,8 @@ int main(void)
             CHECK(power_status.fault==0U);
         }
     }
-    run_start(3U); worker();
-    for(unsigned n=0;n<8 && power_status.state!=POWER_HOLD;n++) {period(6.04f,12,0);worker();}
-    CHECK(power_status.state==POWER_HOLD && enabled_outputs==0U);
-    for(unsigned n=0;n<8 && power_status.state!=POWER_BOOTSTRAP;n++) {period(5.8f,12,0);worker();}
-    CHECK(power_status.state==POWER_BOOTSTRAP && enabled_outputs==0U);
-    period(5.8f,12,0); worker(); CHECK(enabled_outputs==LOW_OUTPUTS);
-    for(unsigned n=0;n<29;n++) {period(5.8f,12,0);worker();CHECK(power_status.state==POWER_BOOTSTRAP);}
-    period(5.8f,12,0);worker(); CHECK(power_status.state==POWER_ARMING);
-    period(5.8f,12,0);worker(); CHECK(power_status.state==POWER_ARMING);
-    period(5.8f,12,0);worker(); CHECK(power_status.state==POWER_RUNNING && enabled_outputs==ALL_OUTPUTS);
-    /* A fresh sample can cancel staged recovery before low-side enable. */
-    run_start(3U); worker();
-    for(unsigned n=0;n<8 && power_status.state!=POWER_HOLD;n++) {period(6.04f,12,0);worker();}
-    CHECK(power_status.state==POWER_HOLD);
-    for(unsigned n=0;n<8 && power_status.state!=POWER_BOOTSTRAP;n++) {period(5.8f,12,0);worker();}
-    CHECK(power_status.state==POWER_BOOTSTRAP && enabled_outputs==0U);
-    period(6.0f,12,0);worker();
-    CHECK(power_status.state==POWER_HOLD && enabled_outputs==0U);
+    run_start(3U);worker();
+    for(unsigned n=0;n<60;n++){period(6.1f,12,0);worker();CHECK(power_status.state==POWER_RUNNING && enabled_outputs==ALL_OUTPUTS);}
     /* Both Boost directions stay all-off for at least3 PWM periods, then
      * require a fresh Boost plan; both now compute every6 PWM periods. */
     for(unsigned mode=2;mode<=4;mode+=2) {
@@ -134,17 +118,7 @@ int main(void)
             if(power_status.state==POWER_CHANGEOVER)CHECK(enabled_outputs==0U);
         }
         CHECK(power_status.state==POWER_RUNNING && enabled_outputs==ALL_OUTPUTS);
-        if(mode==4U) {
-            for(unsigned n=0;n<12 && power_status.state!=POWER_HOLD;n++) {period(24.2f,12,0);worker();}
-            CHECK(power_status.state==POWER_HOLD && enabled_outputs==0);
-            for(unsigned n=0;n<12 && power_status.state!=POWER_BOOTSTRAP;n++) {period(23.5f,12,0);worker();}
-            CHECK(power_status.state==POWER_BOOTSTRAP && enabled_outputs==0);
-            period(23.5f,12,0);worker();CHECK(enabled_outputs==LOW_OUTPUTS);
-            for(unsigned n=0;n<29;n++) {period(23.5f,12,0);worker();CHECK(power_status.state==POWER_BOOTSTRAP);}
-            period(23.5f,12,0);worker();CHECK(power_status.state==POWER_ARMING);
-            period(23.5f,12,0);worker();CHECK(power_status.state==POWER_ARMING);
-            period(23.5f,12,0);worker();CHECK(power_status.state==POWER_RUNNING && enabled_outputs==ALL_OUTPUTS);
-        }
+        if(mode==4U)for(unsigned n=0;n<60;n++){period(24.2f,12,0);worker();CHECK(power_status.state==POWER_RUNNING && enabled_outputs==ALL_OUTPUTS);}
         stop();worker();period(12,12,0);worker();
         CHECK(power_status.state==POWER_STOPPED && enabled_outputs==0U);
     }

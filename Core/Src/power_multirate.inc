@@ -4,7 +4,7 @@
 #include "pwm_density.h"
 typedef struct {
     uint32_t generation, begin;
-    unsigned mode, hold, resume;
+    unsigned mode;
 #if POWER_RAW_FAST_IRQ
     unsigned left,right,current;
 #else
@@ -13,7 +13,7 @@ typedef struct {
 } ControlRequest;
 typedef struct {
     uint32_t generation;
-    unsigned hold, resume, valid, boost, changeover, run;
+    unsigned valid, boost, changeover, run;
     union { float duty; uint32_t duty_bits; };
     union { float reference; uint32_t reference_bits; };
     PwmPlan plan;
@@ -66,18 +66,11 @@ void Power_ControlIRQ(void)
 #endif
     ControlResult result = {0};
     result.generation = request.generation;
-    result.hold = request.hold;
-    result.resume = request.resume;
     if (request.mode >= 3U) {
         reverse_U = (reverse_ExternalInputs){.V_left=left,
             .V_right=right,.IL=current,.mode=(float)request.mode};
-        if (request.resume) reverse_prepare_resume(left);
-        if (request.hold && !request.resume) {
-            if (request.mode == 3U) reverse_main_buck_hold_step();
-            else reverse_main_boost_hold_step();
-        }
-        else if (request.mode == 4U) reverse_main_boost_step();
-        else reverse_step();
+        if (request.mode == 4U) reverse_main_boost_step();
+        else reverse_main_buck_step();
         result.duty = reverse_Y.D_cm_R;
         result.reference = reverse_B.Saturation4;
         result.boost = reverse_Y.BOOST_RUN_R;
@@ -169,24 +162,7 @@ static void control_modulate(uint32_t begin, uint32_t spacing)
 
 static void control_slice(uint32_t begin, uint32_t spacing)
 {
-    const unsigned reverse = active_mode >= 3U;
-#if POWER_RAW_FAST_IRQ
-    unsigned vout=raw_output();
-#else
-    const float vout=reverse?power_status.v_left:power_status.v_right;
-#endif
-    if (reverse && power_status.state == POWER_RUNNING && control_run &&
-#if POWER_RAW_FAST_IRQ
-        Raw_Contains(raw_policy.hold_output,vout))
-#else
-        vout>=active_target*1.005f)
-#endif
-    {
-        Power_EmergencyOff();
-        power_status.state = POWER_HOLD;
-        control_plan_valid = 0U;
-        control_pulse_fraction = 0;
-    }
+    /* MAIN reverse now regulates continuously with the forward controller. */
     unsigned due = !control_countdown || --control_countdown == 0U;
     /* Commit completed work at the earliest safe PWM boundary. Holding a
      * completed result until the next control request adds needless loop delay. */
@@ -200,8 +176,7 @@ static void control_slice(uint32_t begin, uint32_t spacing)
         __DMB();
         const ControlResult result = control_result;
         control_pending = control_ready = 0U;
-        const unsigned holding = power_status.state == POWER_HOLD;
-        if (result.generation == control_generation && result.hold == holding) {
+        if (result.generation == control_generation) {
             if (!result.valid) { trip(POWER_FAULT_CONTROLLER); return; }
             uint32_t elapsed = DWT->CYCCNT - begin;
             uint32_t phase = HRTIM1->sTimerxRegs[TIMER_B].CNTxR;
@@ -219,25 +194,7 @@ static void control_slice(uint32_t begin, uint32_t spacing)
             power_status.v_reference = result.reference;
 #endif
             control_run = result.run;
-            if (holding) {
-                if (result.resume &&
-#if POWER_RAW_FAST_IRQ
-                    raw_can_resume()
-#else
-                    vout < active_target * 0.99f && fabsf(power_status.il) < 0.25f
-#endif
-                    ) {
-                    resume_plan = result.plan;
-                    bootstrap_resume = 1U;
-                    bootstrap_cycles = 31U;
-                    resume_bootstrap_pending = 1U;
-                    power_status.state = POWER_BOOTSTRAP;
-                    control_countdown = 0U;
-                    control_plan_valid = 0U;
-                    control_pulse_fraction = 0;
-                    return;
-                }
-            } else {
+            {
                 if ((active_mode == 2U || active_mode == 4U) && result.changeover) {
                     Power_EmergencyOff();
                     power_status.state = POWER_CHANGEOVER;
@@ -269,13 +226,10 @@ static void control_slice(uint32_t begin, uint32_t spacing)
     }
     if (!due) return;
     control_request = (ControlRequest){.generation=control_generation,
-        .begin=begin,.mode=active_mode,.hold=power_status.state == POWER_HOLD,
-        .resume=power_status.state==POWER_HOLD &&
+        .begin=begin,.mode=active_mode,
 #if POWER_RAW_FAST_IRQ
-        raw_can_resume(),
         .left=power_status.raw_vh,.right=power_status.raw_vl,.current=power_status.raw_il
 #else
-        vout<active_target*0.99f && fabsf(power_status.il)<0.25f,
         .left=power_status.v_left,.right=power_status.v_right,.current=power_status.il
 #endif
     };

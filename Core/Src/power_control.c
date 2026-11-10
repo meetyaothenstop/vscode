@@ -17,7 +17,6 @@ static volatile uint16_t early_input_raw;
 static volatile uint32_t fast_c_cycles_total;
 typedef struct { unsigned left,right,current; } RawSnapshot;
 static inline unsigned raw_output(void);
-static inline int raw_can_resume(void);
 static __attribute__((noinline)) void raw_fault_convert(const RawSnapshot *sample)
 {
     power_status.fault_v_left=(float)sample->left*ADC_LEFT_VOLTS_PER_COUNT;
@@ -46,12 +45,11 @@ static uint32_t cycle_budget;
 static uint32_t previous_entry;
 static unsigned have_previous_entry;
 static volatile unsigned sample_valid;
+#if !POWER_MAIN_APPLICATION
 static PwmPlan resume_plan;
+#endif
 
 #if POWER_MAIN_APPLICATION
-/* MAIN reverse Buck separates late recovery calculation from low-side
- * enabling. Pending means POWER_BOOTSTRAP with every output still off. */
-static unsigned resume_bootstrap_pending;
 /* STOP and both forward modes use the same late input sample. Reverse
  * modes retain ADC1 for the left output bus, even if unused ADC2 is lost. */
 static volatile unsigned early_sample_valid;
@@ -263,9 +261,6 @@ static void trip_record(uint32_t fault,uint32_t detail,uint32_t elapsed,
 #if POWER_MULTIRATE_CONTROL
     control_cancel();
 #endif
-#if POWER_MAIN_APPLICATION
-    resume_bootstrap_pending = 0U;
-#endif
     __set_PRIMASK(saved);
 }
 
@@ -337,7 +332,6 @@ void Power_Stop(void)
     control_cancel();
 #endif
 #if POWER_MAIN_APPLICATION
-    resume_bootstrap_pending = 0U;
     power_status.d_cmd = power_status.v_reference = 0.0f;
     /* A later start must qualify on a fresh STOP sample, rather than the
      * preceding mode's ADC1-only phase or its ignored ADC2 status. */
@@ -357,7 +351,6 @@ void Power_ClearFault(void)
     control_cancel();
 #endif
 #if POWER_MAIN_APPLICATION
-    resume_bootstrap_pending = 0U;
     sample_valid = early_sample_valid = 0U;
 #endif
     if (!PowerProtection_Acknowledge()) hardware_trip();
@@ -421,9 +414,6 @@ static int enable_outputs(uint32_t outputs)
 static int begin_bootstrap(unsigned resume)
 {
     /* Callers have all outputs disabled: stopped, HOLD or staged resume. */
-#if POWER_MAIN_APPLICATION
-    resume_bootstrap_pending = 0U;
-#endif
     bootstrap_resume = resume;
     bootstrap_cycles = 30U; /* 200 us with high outputs disabled */
     HRTIM1->sTimerxRegs[TIMER_A].CMP1xR = PWM_MIN_COMPARE_TICKS;
@@ -461,7 +451,6 @@ HAL_StatusTypeDef Power_Init(ADC_HandleTypeDef *adc, HRTIM_HandleTypeDef *hrtim)
         HAL_RCC_GetHCLKFreq() != 150000000U) return HAL_ERROR;
     power_status.state = POWER_STOPPED;
 #if POWER_MAIN_APPLICATION
-    resume_bootstrap_pending = 0U;
     sample_valid = early_sample_valid = 0U;
 #endif
     if (PowerProtection_Init(hrtim) != HAL_OK) {
@@ -652,9 +641,6 @@ int Power_RequestStart(unsigned mode, float target_volts)
         forward_U.mode = (float)mode;
     }
     bootstrap_resume = transition_ready = 0U;
-#if POWER_MAIN_APPLICATION
-    resume_bootstrap_pending = 0U;
-#endif
     reverse_polarity_cycles = 0U;
     power_status.isr_cycles_max = 0U;
 #if POWER_MULTIRATE_CONTROL
@@ -904,29 +890,6 @@ void Power_TimerIRQ(void)
     }
 
     if (power_status.state == POWER_BOOTSTRAP) {
-#if POWER_MAIN_APPLICATION
-        if (resume_bootstrap_pending) {
-            resume_bootstrap_pending = 0U;
-            /* ADC/input/output/current checks above use this period's fresh
-             * sample. Abandon a no-longer-qualified resume while still off. */
-            if (
-#if POWER_RAW_FAST_IRQ
-                raw_can_resume()
-#else
-                vout < active_target * 0.99f && fabsf(power_status.il) < 0.25f
-#endif
-               ) {
-                if (!begin_bootstrap(1U)) DIAG_IRQ_RETURN();
-            } else {
-                bootstrap_cycles = 0U;
-                power_status.state = POWER_HOLD;
-            }
-            DIAG_CHECKPOINT(POWER_DIAG_CP_STATE);
-            /* Enabling starts interval one; no decrement or controller work.
-             * Both enable and cancellation still undergo T5/T6 below. */
-            goto finish_control_slice;
-        }
-#endif
         /* The IRQ which enables the low sides starts interval one; do not
          * count an interval before it has elapsed. HOLD resume is started
          * separately and follows the same 30 complete period requirement. */
@@ -936,11 +899,14 @@ void Power_TimerIRQ(void)
         }
         if (--bootstrap_cycles == 0U) {
             PwmPlan initial;
+#if !POWER_MAIN_APPLICATION
             if (bootstrap_resume) initial = resume_plan;
+            else
+#endif
 #if POWER_RAW_FAST_IRQ
-            else { initial.left_compare=reverse?(PWM_PERIOD_TICKS*85U/100U+PWM_DEADTIME_TICKS):0U; initial.right_compare=reverse?0U:(PWM_PERIOD_TICKS*85U/100U+PWM_DEADTIME_TICKS); }
+            { initial.left_compare=reverse?(PWM_PERIOD_TICKS*85U/100U+PWM_DEADTIME_TICKS):0U; initial.right_compare=reverse?0U:(PWM_PERIOD_TICKS*85U/100U+PWM_DEADTIME_TICKS); }
 #else
-            else if (reverse) (void)PWM_MakeReversePlan(0.0f, 0, &initial);
+            if (reverse) (void)PWM_MakeReversePlan(0.0f, 0, &initial);
             else (void)PWM_MakePlan(0.0f, 0, &initial);
 #endif
             write_plan(&initial);
@@ -977,14 +943,16 @@ void Power_TimerIRQ(void)
     control_modulate(begin, spacing);
     goto finish_control_slice;
 #else
+    PwmPlan plan;
+#if !POWER_MAIN_APPLICATION
     if (reverse && power_status.state == POWER_RUNNING && reverse_Y.CTRL_RUN_R &&
         vout >= active_target * 1.005f) {
         Power_EmergencyOff();
         power_status.state = POWER_HOLD;
     }
-    PwmPlan plan;
     int resuming = power_status.state == POWER_HOLD &&
                    vout < active_target * 0.99f && fabsf(power_status.il) < 0.25f;
+#endif
     DIAG_CHECKPOINT(POWER_DIAG_CP_STATE);
     DIAG_STAGE(POWER_DIAG_STAGE_CONTROLLER);
     if (reverse) {
@@ -992,19 +960,18 @@ void Power_TimerIRQ(void)
         reverse_U.V_left = power_status.v_left;
         reverse_U.V_right = power_status.v_right;
         reverse_U.mode = (float)active_mode;
+#if !POWER_MAIN_APPLICATION
         if (resuming) reverse_prepare_resume(vout);
+#endif
 #if POWER_MAIN_APPLICATION
         /* All three values above came from the accepted ADC sequence. Input,
          * output/current and startup protections have already run this IRQ. */
-        if (active_mode == 3U) {
-            if (power_status.state == POWER_HOLD && !resuming) reverse_main_buck_hold_step();
-            else reverse_main_buck_step();
-        } else
+        if (active_mode == 3U) reverse_main_buck_step();
+        else reverse_step();
+#else
+        if (power_status.state == POWER_HOLD && !resuming) reverse_hold_step();
+        else reverse_step();
 #endif
-        {
-            if (power_status.state == POWER_HOLD && !resuming) reverse_hold_step();
-            else reverse_step();
-        }
         DIAG_CHECKPOINT(POWER_DIAG_CP_CONTROLLER);
         DIAG_STAGE(POWER_DIAG_STAGE_MAP);
         if (reverse_errorStatus ||
@@ -1064,6 +1031,7 @@ void Power_TimerIRQ(void)
         DIAG_IRQ_RETURN();
     }
     DIAG_STAGE(POWER_DIAG_STAGE_WRITE);
+#if !POWER_MAIN_APPLICATION
     if (power_status.state == POWER_HOLD) {
         /* Keep reference/filters alive without winding up PIs while off.
          * Refresh bootstrap before resuming the retained operating mode. */
@@ -1073,21 +1041,14 @@ void Power_TimerIRQ(void)
              * and forces intermediate stores on the normal Buck path too. */
             resume_plan.left_compare = plan.left_compare;
             resume_plan.right_compare = plan.right_compare;
-#if POWER_MAIN_APPLICATION
-            if (active_mode == 3U) {
-                /* Leave every gate off after this late controller/reset/map
-                 * path. The next IRQ enables lows early, after fresh checks. */
-                bootstrap_resume = 1U;
-                bootstrap_cycles = 31U; /* Pending off interval, then30 low. */
-                resume_bootstrap_pending = 1U;
-                power_status.state = POWER_BOOTSTRAP;
-            } else
-#endif
             if (!begin_bootstrap(1U)) DIAG_IRQ_RETURN();
         }
     } else write_plan(&plan);
+#else
+    write_plan(&plan);
 #endif
-#if POWER_MAIN_APPLICATION
+#endif
+#if POWER_MULTIRATE_CONTROL
 finish_control_slice:
 #endif
     DIAG_CHECKPOINT(POWER_DIAG_CP_WRITE);

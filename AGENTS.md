@@ -11,6 +11,12 @@
   never mark hardware OCP wiring or readiness verified without evidence.
 - Preserve history with Git commits/tags and concise test records. Existing
   historical project files are references; they share current source code.
+- Keep `docs/版本与备份对照.md` current for every firmware version and backup.
+  Use separate annotated before/after tags with date and purpose; record the
+  source commit, exact change, verification outcome, known board limitations,
+  and delivered HEX/AXF hashes. Never move an old tag to a different commit.
+  A backup description must make clear which control algorithm and protection
+  policy it preserves, per the user's explicit request (2026-11-10).
 - GitHub SSH remote: `git@github.com:meetyaothenstop/vscode.git` (`origin`).
   Before each substantial firmware refactor, preserve the previous source
   baseline with a Git tag, push it, and verify its remote commit before editing.

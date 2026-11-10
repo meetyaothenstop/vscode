@@ -153,7 +153,7 @@ void Menu_Render(const PowerMenu *menu, const MenuTelemetry *data, MenuFrame *fr
     if (menu->page == MENU_HOME) {
         put(frame, 0, 0, POWER_MAIN_APPLICATION ?
             (POWER_MULTIRATE_CONTROL ?
-                (POWER_MAIN_ADC_SOFTWARE_ONLY ? "MAIN ADC B25/5 R7" : "MAIN HW B25/5 R7") : POWER_UNIFIED_DIAGNOSTICS ?
+                (POWER_MAIN_ADC_SOFTWARE_ONLY ? "MAIN ADC FCTRL1 R7" : "MAIN HW FCTRL1 R7") : POWER_UNIFIED_DIAGNOSTICS ?
                 (POWER_MAIN_ADC_SOFTWARE_ONLY ? "MAIN ADC DIAG 6A" : "MAIN HW DIAG 6A") :
                 (POWER_MAIN_ADC_SOFTWARE_ONLY ? "MAIN ADC RBUCK RES1" : "MAIN HW GUARD 6A")) :
             POWER_BENCH_24V_BUCK_TEST ?
@@ -176,7 +176,7 @@ void Menu_Render(const PowerMenu *menu, const MenuTelemetry *data, MenuFrame *fr
                        mode == MENU_MODE_BUCK ? "BUCK" :
                        (mode == MENU_MODE_BOOST ? "BOOST" : "EQUAL"),
                        (POWER_MAIN_APPLICATION && POWER_MULTIRATE_CONTROL && menu->direction == MENU_FORWARD && mode == MENU_MODE_BOOST) ? " B25A2" :
-                       (POWER_MAIN_APPLICATION && POWER_MULTIRATE_CONTROL && menu->direction == MENU_REVERSE && mode == MENU_MODE_BOOST) ? " R25V7" :
+                       (POWER_MAIN_APPLICATION && menu->direction == MENU_REVERSE && mode != MENU_MODE_EQUAL) ? " FCTRL1" :
                        POWER_MAIN_APPLICATION ? (POWER_MULTIRATE_CONTROL ? (POWER_RAW_FAST_IRQ ? (POWER_EVENT_DIAGNOSTICS ? (POWER_OLED_FRAME_RESUME ? (POWER_ADC_FAULT_DETAILS ? " M-ADG2" : " M-FRM1") : " M-EVT1") : " M-RAW1") : " M-50/10") : POWER_UNIFIED_DIAGNOSTICS ? " M-DIAG" : " M-RRES1") :
                        POWER_BENCH_24V_BUCK_TEST ? " SW15-C6" :
                        POWER_BENCH_LIVE_OLED ? " SW-DMA8" :

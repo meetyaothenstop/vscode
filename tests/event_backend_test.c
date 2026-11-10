@@ -125,8 +125,8 @@ int main(int argc,char **argv)
     stopped_samples(0,12,0);CHECK(request(3,6));
     for(unsigned n=0;n<33;n++)period(0,12,0);
     worker();period(0,12,0);worker();period(6.1f,12,0);worker();
-    CHECK(power_status.state==POWER_HOLD);
-    period(6.1f,12,7.6f);CHECK(power_event.fault.state==POWER_HOLD);
+    CHECK(power_status.state==POWER_RUNNING);
+    period(6.1f,12,7.6f);CHECK(power_event.fault.state==POWER_RUNNING);
     stopped_samples(0,12,0);CHECK(request(3,6));
     for(unsigned n=0;n<33;n++)period(0,12,0);
     worker();period(0,12,0);worker();period(6.1f,12,0);worker();
@@ -137,7 +137,7 @@ int main(int argc,char **argv)
     }
     CHECK(recovered);
     period(5.8f,12,7.6f);
-    CHECK(power_event.fault.state==POWER_RUNNING && power_event.fault.bootstrap_resume==1);
+    CHECK(power_event.fault.state==POWER_RUNNING && power_event.fault.bootstrap_resume==0);
     CHECK(!power_event.fault.bootstrap_remaining && !power_event.fault.arming_remaining);
     stopped_samples(0,12,0);CHECK(request(3,6));period(0,12,0);
     power_event.clock_ready=0;period(0,12,7.6f);
